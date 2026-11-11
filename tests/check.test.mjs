@@ -110,6 +110,16 @@ test('pickDenseCells: six densest, at most two per panel, no touching cells of o
   assert.deepEqual(pickDenseCells({ svg, map }), picks);
 });
 
+test('partBox takes a group name: the union of every part in the group', () => {
+  // 4 x 2 map cells over an 8 x 4 rect: ids row 0 = [1, 0, 0, 2], row 1 = [0, 3, 0, 0].
+  const panel = { id: 'p', rect: [100, 50, 8, 4], parts: ['boy.hair.43', 'boy.hair.19', 'boy.hand'], rle: [1, 1, 0, 2, 2, 1, 0, 1, 3, 1, 0, 2] };
+  assert.deepEqual(partBox(panel, 'boy.hair.43'), [100, 50, 2, 2]);
+  assert.deepEqual(partBox(panel, 'boy.hair'), [100, 50, 8, 2]);
+  assert.deepEqual(partBox(panel, 'boy.hand'), [102, 52, 2, 2]);
+  assert.equal(partBox(panel, 'boy'), null, 'a prefix that is not a group is not a match');
+  assert.equal(plan({ size: [200, 100], panels: [panel] }, { part: 'boy.hair' })[0].name, 'part-p-boy.hair');
+});
+
 test('capture plan: page, panel, part box and grid; clamping', () => {
   const rle = [0, 3, 1, 2, 0, 1, 1, 2, 0, 4];            // 4 x 3 cells: part 1 at cells (3,0), (0,1)... rows below
   const map = { size: [100, 100], panels: [{ id: 'a', rect: [10, 20, 8, 6], parts: ['x'], rle }, { id: 'b', rect: [40, 20, 8, 6], parts: ['y'], rle: [0, 12] }] };

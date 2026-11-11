@@ -156,7 +156,7 @@ request: make the eyes darker
 4. Run `node <skill>/scripts/diff.mjs <page dir> --panel <id> --region <x,y,w,h> --margin 60`. It must end `ok`. When a pose or form change moves a part's outline or shadow beyond the region, rerun with `--allow-part <name>` for that part and say so to the user.
 5. Capture the panel (`capture.mjs <dir> --panel <id>` and a `--zoom 4 --part` close-up if the change is small), read the PNG, and report what changed.
 
-A request that names no region ("panel 2, the helm, darker") follows the same path: find the part in `page.map.json` and use `capture.mjs --part` to see its box. `references/rework.md` has worked examples of each kind.
+A request that names no region ("panel 2, the helm, darker") follows the same path: find the part in `page.map.json` and use `capture.mjs --part` to see its box (`--part` and `--allow-part` also take a group name as the viewer lists it, such as `boy.hair` for `boy.hair.43`, `boy.hair.19` and so on). `references/rework.md` has worked examples of each kind.
 
 ## Verify like an editor
 

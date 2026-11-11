@@ -2,12 +2,14 @@
 // Screenshots of a built page with Chrome:
 //   node scripts/capture.mjs <dir> [--panel id] [--part name] [--zoom 2|4] [--grid n] [--out shots/]
 // No selector: the whole page. --panel: that panel. --part: the bounding box of that part
-// (in every panel that has it, or in --panel). --grid n: n x n close-ups of the page (or of --panel).
+// (in every panel that has it, or in --panel); a group name such as boy.hair covers
+// boy.hair.43, boy.hair.19 and so on. --grid n: n x n close-ups of the page (or of --panel).
 // <dir> holds page.svg and page.map.json. Exit 2 on bad arguments, 1 when Chrome fails.
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { decodeMap } from '../kit/page.mjs';
+import { partGroup } from '../kit/viewer-core.mjs';
 import { screenshot, findChrome } from './chrome.mjs';
 import { isMain } from './main.mjs';
 
@@ -30,14 +32,19 @@ export function clampCrop([x, y, w, h], [PW, PH]) {
   return [x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0)];
 }
 
-/** Bounding box of a part in page pixels, from a panel's map entry, or null when the part is absent. */
+/**
+ * Bounding box of a part in page pixels, from a panel's map entry, or null when the part is absent.
+ * `name` is a part name or a group name as the viewer lists it ("boy.hair" covers "boy.hair.43",
+ * "boy.hair.19", ...; see partGroup): the box is the union of every part it names.
+ */
 export function partBox(panel, name) {
-  const n = panel.parts.indexOf(name) + 1;
-  if (!n) return null;
+  const want = new Set();
+  panel.parts.forEach((q, i) => { if (q === name || partGroup(q) === name) want.add(i + 1); });
+  if (!want.size) return null;
   const ids = decodeMap(panel.rle), mw = Math.ceil(panel.rect[2] / 2);
   let x0 = Infinity, y0 = Infinity, x1 = -1, y1 = -1;
   for (let i = 0; i < ids.length; i++) {
-    if (ids[i] !== n) continue;
+    if (!want.has(ids[i])) continue;
     const cx = i % mw, cy = (i - cx) / mw;
     if (cx < x0) x0 = cx; if (cx > x1) x1 = cx; if (cy < y0) y0 = cy; if (cy > y1) y1 = cy;
   }
