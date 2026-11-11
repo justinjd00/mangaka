@@ -3,7 +3,8 @@
 // Saves the current page.svg as page.prev.svg (for scripts/diff.mjs), rebuilds
 // with the panel cache and prints whether each panel was rebuilt or cached.
 // With --panel, exits 1 when any other panel had to be rebuilt: the edit
-// reached further than that panel. Exit 2 on bad arguments.
+// reached further than that panel. Panels that can never be cached are rebuilt
+// every time; they do not count, but each gets a warning. Exit 2 on bad arguments.
 import { copyFileSync, existsSync } from 'node:fs';
 import { resolve, dirname, join, relative, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -28,18 +29,21 @@ if (existsSync(svg)) {
   console.log(`saved ${join(dir, 'page.prev.svg')}`);
 } else console.log(`no ${svg} yet, nothing saved as page.prev.svg`);
 
-const rebuilt = [], cachedIds = [];
+const rebuilt = [], cachedIds = [], uncached = [];
 const { stats } = buildPage(spec, {
   dir, cacheDir: join(dir, '.mangaka', 'cache'), pageFile: relative(process.cwd(), path).split(sep).join('/'),
   onPanel: ({ id, cached, uncacheable }) => {
     console.log(`panel ${id.padEnd(12)} ${cached ? 'cached' : 'rebuilt'}${uncacheable ? ` (never cached: ${uncacheable})` : ''}`);
     // A panel that can never be cached is rebuilt every time; that says nothing about the edit.
     if (cached) cachedIds.push(id);
-    else if (!uncacheable) rebuilt.push(id);
+    else if (uncacheable) uncached.push({ id, uncacheable });
+    else rebuilt.push(id);
   },
 });
 console.log(`wrote ${svg} (${stats.svgBytes} bytes)`);
 if (panel) {
+  // These panels are rebuilt on every run, so the locality claim does not cover them.
+  for (const u of uncached) if (u.id !== panel) console.warn(`warning: panel ${u.id} is not cacheable and was rebuilt (${u.uncacheable})`);
   const others = rebuilt.filter(id => id !== panel);
   if (others.length) {
     console.error(`rebuilt more than panel "${panel}": ${others.join(', ')} also changed`);

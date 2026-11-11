@@ -185,3 +185,48 @@ test('rework.mjs and diff.mjs: rebuild one panel, then prove the change stayed i
     assert.equal(node(join(ROOT, 'scripts/diff.mjs'), '.', '--panel', 'a', '--region', '2,0,1,1').status, 2);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('diff locates a change by the vertices that moved off the other version', async () => {
+  const { locateChange, geometryOf, pathPoints, diffPages, TOLERANCE } = await import('../scripts/diff.mjs');
+  assert.equal(TOLERANCE, 1);
+  // A long horizontal stroke at y = 50, one vertex every 10 px from x = 0 to 180.
+  const line = (edit = {}) => 'M0 50' + Array.from({ length: 18 }, (_, i) => { const x = (i + 1) * 10; return `L${x} ${50 + (edit[x] ?? 0)}`; }).join('');
+  const layer = d => new Map([[d, pathPoints(d)]]);
+  const before = geometryOf(layer(line()));
+
+  // Changed only at its far end: located at that end, not over the whole stroke.
+  assert.deepEqual(locateChange(pathPoints(line({ 180: 6 })), before), [180, 56, 180, 56]);
+  // A stroke found in one version only is located by its whole box.
+  assert.deepEqual(locateChange(pathPoints('M20 10L60 30L40 35'), before), [20, 10, 60, 35]);
+  assert.deepEqual(locateChange(pathPoints(line()), geometryOf(new Map())), [0, 50, 180, 50]);
+
+  // Through diffPages on hand-built pages: an in-region change at x = 20 plus a far vertex at x = 180.
+  const page = d => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100"><g id="p" transform="translate(0 0)"><g clip-path="url(#p-clip)">` +
+    `<g transform="scale(1)" fill="none" stroke="#000"><path d="${d}" stroke-width="0.6"/></g></g></g></svg>`;
+  const map = { size: [200, 100], panels: [{ id: 'p', rect: [0, 0, 200, 100], parts: [], rle: [0, 5000] }], lettering: [] };
+  const run = far => diffPages({ prev: page(line()), next: page(line({ 20: 6, 180: far })), map, panel: 'p', region: [0, 0.4, 0.2, 0.2], margin: 5 });
+  const layerOf = r => r.panels[0].layers.find(l => l.name === 'hatchMid');
+  assert.deepEqual(layerOf(run(0)), { name: 'hatchMid', inside: 2, outside: 0 });
+  assert.deepEqual(layerOf(run(0.5)), { name: 'hatchMid', inside: 2, outside: 0 }, 'a 0.5 px wobble is tolerated');
+  const shifted = run(3);
+  assert.equal(layerOf(shifted).outside, 2, 'a far vertex moved by 3 px is a change outside');
+  assert.equal(shifted.outside, 2);
+});
+
+test('rework.mjs warns about panels it cannot cache instead of counting them', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'mangaka-rework-warn-'));
+  const file = join(dir, 'page.mjs');
+  const src = black => `export default { size: [100, 50], panels: [\n` +
+    `  { id: 'a', rect: [0, 0, 48, 50], camera: { scale: 1 }, regions: [{ rect: [5, 5, 10, 10], set: { black: ${black} } }] },\n` +
+    `  { id: 'b', rect: [52, 0, 48, 50], camera: { scale: 1 }, background: () => 0.4 },\n] };\n`;
+  const node = (...args) => spawnSync(process.execPath, args, { cwd: dir, encoding: 'utf8' });
+  try {
+    writeFileSync(file, src(0.8));
+    assert.equal(node(join(ROOT, 'scripts/build.mjs'), 'page.mjs').status, 0);
+    writeFileSync(file, src(0.5));
+    const rw = node(join(ROOT, 'scripts/rework.mjs'), 'page.mjs', '--panel', 'a');
+    assert.equal(rw.status, 0, rw.stderr);
+    assert.match(rw.stdout, /panel a +rebuilt/);
+    assert.match(rw.stderr, /^warning: panel b is not cacheable and was rebuilt \(background is a function with no description\)$/m);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

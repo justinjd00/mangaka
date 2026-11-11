@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // Prove a region rework stayed in its region:
-//   node scripts/diff.mjs <dir> --panel id --region x,y,w,h [--margin 40] [--allow-part name ...]
+//   node scripts/diff.mjs <dir> --panel id --region x,y,w,h [--margin 40] [--allow-part name ...] [--help]
 // Compares <dir>/page.prev.svg (saved by rework.mjs) with <dir>/page.svg. The
 // region is given as in the rework instruction: fractions of the panel rect.
 // Each panel layer is compared as a set of strokes; a changed stroke is allowed
-// when the bounding box of its changed vertices (those off the other version's
-// strokes) lies inside the region grown by the margin (page px),
+// when the bounding box of its changed vertices (those more than 1 buffer px,
+// TOLERANCE, off the other version's strokes; the whole stroke when it exists in
+// one version only) lies inside the region grown by the margin (page px),
 // or inside the bounding box of an --allow-part part grown by three margins (its
 // shadow and occlusion reach). Prints a summary per layer and writes nothing.
 // Exit 0 when every change is allowed, 1 when something changed outside, 2 on
@@ -139,21 +140,24 @@ export function splitSvg(svg) {
 
 const grow = (r, m) => [r[0] - m, r[1] - m, r[2] + 2 * m, r[3] + 2 * m];
 const within = (b, r) => b[0] >= r[0] && b[1] >= r[1] && b[2] <= r[0] + r[2] && b[3] <= r[1] + r[3];
-const TOL = 1.5, CELL = 8;
+// A vertex within this many buffer px of the other version's strokes counts as unmoved:
+// resampling an unchanged outline shifts vertices along it, not off it by a pixel.
+export const TOLERANCE = 1;
+const CELL = 8;
 
 /**
  * A lookup of one layer's geometry: near(q) tells whether point q (layer
- * coordinates) lies within TOL of any of the layer's segments or points, and
+ * coordinates) lies within TOLERANCE of any of the layer's segments or points, and
  * has(q) whether the layer has exactly that vertex.
  */
-function geometryOf(layer) {
+export function geometryOf(layer) {
   const grid = new Map();
   const cell = (cx, cy) => { const k = `${cx},${cy}`; let c = grid.get(k); if (!c) grid.set(k, (c = [])); return c; };
   for (const pts of layer ? layer.values() : []) {
     for (let i = 0; i < pts.length; i++) {
       const a = pts[i], b = pts[i + 1] ?? a;
       const seg = [a[0], a[1], b[0], b[1], Math.max(a[2], b[2])];
-      const pad = TOL + seg[4];
+      const pad = TOLERANCE + seg[4];
       const x0 = Math.floor((Math.min(a[0], b[0]) - pad) / CELL), x1 = Math.floor((Math.max(a[0], b[0]) + pad) / CELL);
       const y0 = Math.floor((Math.min(a[1], b[1]) - pad) / CELL), y1 = Math.floor((Math.max(a[1], b[1]) + pad) / CELL);
       for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) cell(cx, cy).push(seg);
@@ -166,22 +170,28 @@ function geometryOf(layer) {
   };
   const keys = new Set([...(layer ? layer.values() : [])].flatMap(pts => pts.map(String)));
   return {
-    near: q => (grid.get(`${Math.floor(q[0] / CELL)},${Math.floor(q[1] / CELL)}`) ?? []).some(sg => dist(q, sg) <= TOL + Math.abs(sg[4] - q[2])),
+    near: q => (grid.get(`${Math.floor(q[0] / CELL)},${Math.floor(q[1] / CELL)}`) ?? []).some(sg => dist(q, sg) <= TOLERANCE + Math.abs(sg[4] - q[2])),
     has: q => keys.has(String(q)),
   };
 }
 
 /**
- * Where a changed stroke changed, in page px: the bounding box of its vertices
- * that lie off the other version's layer (an outline redrawn around a local
- * change keeps the rest of its course, even when its vertices are resampled);
- * failing that, of the vertices the other version does not have exactly; and
- * failing that, of the whole stroke.
+ * Where a changed stroke changed, as a box [x0, y0, x1, y1] in its layer's own
+ * coordinates. `other` is geometryOf(the other version's layer). The box covers
+ * the stroke's vertices that lie off the other version's strokes (an outline
+ * redrawn around a local change keeps the rest of its course, even when its
+ * vertices are resampled); failing that, the vertices the other version does
+ * not have exactly; and failing that, the whole stroke.
  */
-function changedBox(pts, other, P, scale) {
+export function locateChange(pts, other) {
   let moved = pts.filter(q => !other.near(q));
   if (!moved.length) moved = pts.filter(q => !other.has(q));
-  const b = pointsBox(moved.length ? moved : pts);
+  return pointsBox(moved.length ? moved : pts);
+}
+
+/** locateChange in page px. */
+function changedBox(pts, other, P, scale) {
+  const b = locateChange(pts, other);
   return [P.ox + b[0] * scale, P.oy + b[1] * scale, P.ox + b[2] * scale, P.oy + b[3] * scale];
 }
 
@@ -248,12 +258,16 @@ function parseRegion(s) {
 
 function main() {
   const usage = 'usage: node scripts/diff.mjs <dir> --panel id --region x,y,w,h [--margin 40] [--allow-part name ...]\n' +
-    '  region: fractions of the panel rect, as in the rework instruction';
+    '  region: fractions of the panel rect, as in the rework instruction\n' +
+    '  margin: page px added around the region (use at least the longest stroke of the styles involved)\n' +
+    `  a changed stroke is located by its vertices that moved more than ${TOLERANCE} buffer px off the\n` +
+    '  other version\'s strokes; a stroke found in only one version is located by its whole box';
   const args = process.argv.slice(2);
   const opts = { allowParts: [] }, rest = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (a === '--panel') opts.panel = args[++i];
+    if (a === '--help' || a === '-h') { console.log(usage); process.exit(0); }
+    else if (a === '--panel') opts.panel = args[++i];
     else if (a === '--region') opts.region = parseRegion(args[++i]);
     else if (a === '--margin') opts.margin = Number(args[++i]);
     else if (a === '--allow-part') opts.allowParts.push(args[++i]);
