@@ -33,6 +33,49 @@ const qeuler = ([x, y, z]) => {
   return qmul(qz, qmul(qy, qx));
 };
 
+/**
+ * Read glTF accessor `i` of `json` from the binary chunk `bin` as a typed array of
+ * count * components values. Sparse accessors (glTF 2.0, 3.6.2.3) start from their
+ * buffer view, or from zeros when they have none, and then take the sparse values.
+ */
+export function readAccessor(json, bin, i) {
+  const a = json.accessors?.[i];
+  if (!a) throw new Error(`glTF accessor ${i} does not exist`);
+  const n = COMPONENTS[a.type], T = ARRAYS[a.componentType];
+  if (!n || !T) throw new Error(`glTF accessor ${i}: unsupported type ${a.type} / componentType ${a.componentType}`);
+  const view = (v, what) => {
+    const bv = json.bufferViews?.[v];
+    if (!bv) throw new Error(`glTF accessor ${i}: ${what} buffer view ${v} does not exist`);
+    return bv;
+  };
+  // count elements of n components of type ctype, starting at byte `off` with element stride `stride`.
+  const read = (out, off, count, comps, ctype, stride) => {
+    const size = ARRAYS[ctype].BYTES_PER_ELEMENT, get = READERS[ctype];
+    if (off + (count - 1) * stride + comps * size > bin.length && count > 0) throw new Error(`glTF accessor ${i}: data runs past the end of the buffer`);
+    const dv = new DataView(bin.buffer, bin.byteOffset + off);
+    for (let k = 0; k < count; k++) for (let c = 0; c < comps; c++) out[k * comps + c] = dv[get](k * stride + c * size, true);
+    return out;
+  };
+  const out = new T(a.count * n);
+  if (a.bufferView !== undefined) {
+    const bv = view(a.bufferView, 'its');
+    read(out, (bv.byteOffset || 0) + (a.byteOffset || 0), a.count, n, a.componentType, bv.byteStride || T.BYTES_PER_ELEMENT * n);
+  }
+  const sp = a.sparse;
+  if (sp) {
+    const ix = sp.indices, IT = ARRAYS[ix.componentType];
+    if (![5121, 5123, 5125].includes(ix.componentType)) throw new Error(`glTF accessor ${i}: sparse index componentType ${ix.componentType} is not allowed`);
+    const ibv = view(ix.bufferView, 'sparse index'), vbv = view(sp.values.bufferView, 'sparse value');
+    const idx = read(new IT(sp.count), (ibv.byteOffset || 0) + (ix.byteOffset || 0), sp.count, 1, ix.componentType, IT.BYTES_PER_ELEMENT);
+    const val = read(new T(sp.count * n), (vbv.byteOffset || 0) + (sp.values.byteOffset || 0), sp.count, n, a.componentType, T.BYTES_PER_ELEMENT * n);
+    for (let k = 0; k < sp.count; k++) {
+      if (idx[k] >= a.count) throw new Error(`glTF accessor ${i}: sparse index ${idx[k]} is past its count ${a.count}`);
+      for (let c = 0; c < n; c++) out[idx[k] * n + c] = val[k * n + c];
+    }
+  }
+  return out;
+}
+
 function materialClass(name) {
   if (/_HAIR/.test(name)) return 'hair';
   if (/_SKIN/.test(name)) return 'skin';
@@ -55,17 +98,7 @@ export function loadVRM(path) {
   if (!vrm) throw new Error('not a VRM file');
   const bin = b.subarray(20 + jl + 8);
 
-  const accessor = i => {
-    const a = j.accessors[i], bv = j.bufferViews[a.bufferView];
-    const n = COMPONENTS[a.type], T = ARRAYS[a.componentType];
-    const es = T.BYTES_PER_ELEMENT * n, stride = bv.byteStride || es;
-    const off = (bv.byteOffset || 0) + (a.byteOffset || 0);
-    const out = new T(a.count * n);
-    const dv = new DataView(bin.buffer, bin.byteOffset + off);
-    const read = READERS[a.componentType];
-    for (let k = 0; k < a.count; k++) for (let c = 0; c < n; c++) out[k * n + c] = dv[read](k * stride + c * T.BYTES_PER_ELEMENT, true);
-    return out;
-  };
+  const accessor = i => readAccessor(j, bin, i);
 
   const texCache = new Map();
   const texture = ti => {
@@ -98,6 +131,7 @@ export function loadVRM(path) {
     const mesh = j.meshes[n.mesh];
     mesh.primitives.forEach((p, pi) => {
       const at = p.attributes;
+      const accessor = k => { try { return readAccessor(j, bin, k); } catch (e) { throw new Error(`mesh "${mesh.name}" primitive ${pi}: ${e.message}`); } };
       prims.push({
         index: prims.length, mesh: n.mesh, node, skin: n.skin, mat: p.material, name: mesh.name + '.' + pi,
         pos: accessor(at.POSITION), nrm: accessor(at.NORMAL), uv: accessor(at.TEXCOORD_0),

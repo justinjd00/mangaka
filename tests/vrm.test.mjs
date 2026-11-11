@@ -103,3 +103,26 @@ test('skin: false poses the bones only, with the same bone frames', () => {
   assert.deepEqual(bones.bonePos, full.bonePos);
   assert.deepEqual(bones.boneRot, full.boneRot);
 });
+
+test('readAccessor applies sparse values over the base data or over zeros', async () => {
+  const { readAccessor } = await import('../kit/vrm.mjs');
+  // Base: four VEC3 floats; sparse: indices (uint16) 1 and 3, then their two VEC3 values.
+  const base = new Float32Array([1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4]);
+  const idx = new Uint16Array([1, 3]);
+  const vals = new Float32Array([9, 8, 7, 6, 5, 4]);
+  const bin = Buffer.concat([Buffer.from(base.buffer), Buffer.from(idx.buffer), Buffer.from(vals.buffer)]);
+  const json = {
+    bufferViews: [{ byteOffset: 0, byteLength: 48 }, { byteOffset: 48, byteLength: 4 }, { byteOffset: 52, byteLength: 24 }],
+    accessors: [
+      { bufferView: 0, componentType: 5126, count: 4, type: 'VEC3', sparse: { count: 2, indices: { bufferView: 1, componentType: 5123 }, values: { bufferView: 2 } } },
+      { componentType: 5126, count: 4, type: 'VEC3', sparse: { count: 2, indices: { bufferView: 1, componentType: 5123 }, values: { bufferView: 2 } } },
+      { bufferView: 0, componentType: 5126, count: 4, type: 'VEC3', sparse: { count: 1, indices: { bufferView: 1, byteOffset: 2, componentType: 5123 }, values: { bufferView: 2, byteOffset: 12 } } },
+    ],
+  };
+  assert.deepEqual([...readAccessor(json, bin, 0)], [1, 1, 1, 9, 8, 7, 3, 3, 3, 6, 5, 4]);
+  assert.deepEqual([...readAccessor(json, bin, 1)], [0, 0, 0, 9, 8, 7, 0, 0, 0, 6, 5, 4]);
+  assert.deepEqual([...readAccessor(json, bin, 2)], [1, 1, 1, 2, 2, 2, 3, 3, 3, 6, 5, 4]);
+  assert.throws(() => readAccessor(json, bin, 7), /glTF accessor 7 does not exist/);
+  const past = structuredClone(json); past.accessors[0].count = 2;
+  assert.throws(() => readAccessor(past, bin, 0), /sparse index 3 is past its count 2/);
+});
