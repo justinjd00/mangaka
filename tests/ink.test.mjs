@@ -158,3 +158,40 @@ test('every path is in the compact format and hatch stays cheap per stroke', () 
     assert.ok(per < (ss === 1 ? 53 : 34), `ss ${ss}: ${per.toFixed(1)} bytes per hatch stroke`);
   }
 });
+
+test('brush outlines are local: splitting an outline at one end leaves its far part in place', async () => {
+  const { pathPoints } = await import('../scripts/diff.mjs');
+  // One long ellipsoid whose outline runs across the panel; a black region cuts it near the left end.
+  const sc = S.scene();
+  sc.add('bar', 'cloth', S.ellipsoid([0, 0, 0], [1.35, 0.3, 0.3]));
+  const r = renderPanel({ scene: sc, cam, background: gradient(0.35, 0.75), light: { target: [0, 0, 0] } });
+  // Wide brushes everywhere, so a change of pressure profile shows well above rounding.
+  const wide = { rect: [0, 0, W, H], set: { brush: 4 } };
+  const rect = [60, 60, 40, 60];
+  const a = inkPanel(r, { style: 'seinen-dense', seed: 'p1', regions: [wide] });
+  const b = inkPanel(r, { style: 'seinen-dense', seed: 'p1', regions: [wide, { rect, feather: 6, set: { black: 0.02 } }] });
+  const far = rect[0] + rect[2] + 40;
+  // The cut really splits an outline that reaches far past the region.
+  const cut = b.brush.filter(d => !a.brush.includes(d)).map(pathPoints);
+  assert.ok(cut.some(p => p.some(q => q[0] < rect[0] + rect[2] + 10) && p.some(q => q[0] > far + 60)), 'an edited outline spans the far side');
+  // Every far vertex of either version lies on the other version's outlines (within 0.3 buffer px).
+  const segs = ds => ds.map(pathPoints).flatMap(p => p.map((q, i) => [q, p[(i + 1) % p.length]]));
+  const dist = (q, [u, v]) => {
+    const dx = v[0] - u[0], dy = v[1] - u[1], l2 = dx * dx + dy * dy;
+    const t = l2 ? Math.max(0, Math.min(1, ((q[0] - u[0]) * dx + (q[1] - u[1]) * dy) / l2)) : 0;
+    return Math.hypot(q[0] - u[0] - t * dx, q[1] - u[1] - t * dy);
+  };
+  const off = (from, to) => {
+    const sg = segs(to);
+    let worst = 0, n = 0;
+    for (const p of from.map(pathPoints)) for (const q of p) {
+      if (q[0] < far) continue;
+      n++;
+      worst = Math.max(worst, Math.min(...sg.map(s => dist(q, s))));
+    }
+    assert.ok(n > 100, 'the far side carries outline vertices');
+    return worst;
+  };
+  assert.ok(off(b.brush, a.brush) < 0.3, `far outline moved by ${off(b.brush, a.brush)}`);
+  assert.ok(off(a.brush, b.brush) < 0.3, `far outline moved by ${off(a.brush, b.brush)}`);
+});

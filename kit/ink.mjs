@@ -372,12 +372,22 @@ export function inkPanel(r, { style = 'seinen-dense', seed, regions = [], ss = 1
 
   // Brush outlines: filled shapes with a pressure profile.
   const brush = [];
+  // Pressure wobble: smooth value noise of the absolute buffer position (two octaves, on
+  // lattices of 24 and 10 page px), so an outline's width at a point never depends on where
+  // its chain starts or how long it is, and an edit changes outlines only near the edit.
   const brushBase = hash32(seed, 'brush');
-  const wobble = a => 0.5 + 0.25 * (sin(a) + sin(a * 2.3 + 1.7));
+  const vnoise = (x, y, cell, oct) => {
+    const gx = x / cell, gy = y / cell, ix = floor(gx), iy = floor(gy);
+    const fx = gx - ix, fy = gy - iy, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    const a = rh(brushBase, ix, iy, oct), b = rh(brushBase, ix + 1, iy, oct);
+    const c = rh(brushBase, ix, iy + 1, oct), d = rh(brushBase, ix + 1, iy + 1, oct);
+    return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+  };
+  const wobbleAt = (x, y) => max(0, min(1, 0.5 + ((2 * vnoise(x, y, 24 * K, 0) + vnoise(x, y, 10 * K, 1)) / 3 - 0.5) * 1.6));
   const Dat = (x, y) => D[max(0, min(H - 1, floor(y))) * W + max(0, min(W - 1, floor(x)))];
   const BMat = (x, y) => BM[max(0, min(H - 1, floor(y))) * W + max(0, min(W - 1, floor(x)))];
   const taper = 7.5 * K;
-  const brushOf = (pts, cls, closed, tA, tB, ph) => {
+  const brushOf = (pts, cls, closed, tA, tB) => {
     const simp = closed ? rdpClosed(pts, 0.2) : rdp(pts, 0.2);
     const n = simp.length / 2;
     if (n < 2) return;
@@ -400,7 +410,7 @@ export function inkPanel(r, { style = 'seinen-dense', seed, regions = [], ss = 1
       }
       const dl = min(1, (Dat(x - ty * 1.5, y + tx * 1.5) + Dat(x + ty * 1.5, y - tx * 1.5)) * 0.5);
       w *= 0.7 + 0.65 * dl;
-      w *= 0.86 + 0.3 * wobble(ph + L[i] * 0.09);
+      w *= 0.86 + 0.3 * wobbleAt(x, y);
       left.push(x - ty * w / 2, y + tx * w / 2); right.push(x + ty * w / 2, y - tx * w / 2);
     }
     for (let i = n - 1; i >= 0; i--) left.push(right[i * 2], right[i * 2 + 1]);
@@ -433,7 +443,6 @@ export function inkPanel(r, { style = 'seinen-dense', seed, regions = [], ss = 1
     const follow = (n, d) => {
       const startDeg = deg(n);
       const pts = [n % CW, (n / CW) | 0];
-      const ph = rh(brushBase, pts[0], pts[1]) * 40;
       const cc = [0, 0, 0, 0];
       let closed = false;
       for (;;) {
@@ -457,7 +466,7 @@ export function inkPanel(r, { style = 'seinen-dense', seed, regions = [], ss = 1
       for (let i = 1; i < m; i++) midp.push((pts[i * 2 - 2] + pts[i * 2]) / 2, (pts[i * 2 - 1] + pts[i * 2 + 1]) / 2);
       midp.push(pts[m * 2 - 2], pts[m * 2 - 1]);
       const sm = closed ? smoothClosed(Float32Array.from(midp.slice(2, -2)), 4) : smoothOpen(Float32Array.from(midp), 4);
-      brushOf(Array.from(sm), c, closed, c === 1 || startDeg === 1, c === 1 || endDeg === 1, ph);
+      brushOf(Array.from(sm), c, closed, c === 1 || startDeg === 1, c === 1 || endDeg === 1);
     };
     const total = CW * (H + 1);
     for (let n = 0; n < total; n++) {
