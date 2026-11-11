@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { decodeRle, partsInRect, formatInstruction } from '../kit/viewer-core.mjs';
+import { decodeRle, partsInRect, formatInstruction, partGroup } from '../kit/viewer-core.mjs';
 import { viewerHtml } from '../kit/viewer.mjs';
 
 // p1 is 8 x 6 page px, so its grid is 4 x 3 cells:
@@ -52,6 +52,20 @@ test('partsInRect prefers the inset under the centre and keeps the top eight', (
   assert.equal(many.parts.length, 8);
   assert.deepEqual(many.parts[0], { name: 'a', share: 10 });
   assert.equal(partsInRect(map, [0, 0, 5, 5]).panel, null);
+});
+
+test('partsInRect sums numbered siblings so they cannot crowd out a distinct part', () => {
+  assert.equal(partGroup('boy.hair.43'), 'boy.hair');
+  assert.equal(partGroup('bust.hair.fringe-3'), 'bust.hair.fringe-3');
+  assert.equal(partGroup('gate.rubble.12.x'), 'gate.rubble.12.x');
+  // One row of 40 cells: skin 4, nine hair strips of 3 each, eye 2, background 7.
+  // Ranked one by one, skin and seven strips would fill the top eight and drop the eye.
+  const hair = Array.from({ length: 9 }, (_, i) => `k.hair.${[43, 19, 24, 23, 25, 74, 95, 7, 60][i]}`);
+  const rle = [1, 4, ...hair.flatMap((_, i) => [i + 2, 3]), 11, 2, 0, 7];
+  const map = { size: [80, 2], panels: [{ id: 'q', rect: [0, 0, 80, 2], ss: 1, parts: ['k.skin', ...hair, 'k.eye'], rle }], lettering: [] };
+  const { parts } = partsInRect(map, [0, 0, 80, 2]);
+  assert.deepEqual(parts, [{ name: 'k.hair', share: 68 }, { name: 'k.skin', share: 10 }, { name: 'k.eye', share: 5 }]);
+  assert.equal(formatInstruction({ panel: 'q', region: [0, 0, 1, 1], parts, request: 'x' }).split('\n')[2], 'parts: k.hair (68%), k.skin (10%), k.eye (5%)');
 });
 
 test('formatInstruction gives the block from the design, line for line', () => {

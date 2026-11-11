@@ -14,6 +14,9 @@ export function decodeRle(panel) {
 }
 
 const round2 = v => Math.round(v * 100) / 100;
+
+/** A part name without a trailing numeric segment: "boy.hair.43" -> "boy.hair". */
+export const partGroup = name => name.replace(/\.\d+$/, '');
 const MAX_PARTS = 8;
 
 /** Intersection of two [x, y, w, h] rects, or null when they do not overlap. */
@@ -28,9 +31,10 @@ function clip(a, b) {
  * The panel is the smallest one holding the rect's centre (insets sit on top);
  * when no panel holds it, the one overlapping the rect most. Returns
  * { panel, region, parts }: region is the rect clipped to the panel as
- * fractions of the panel rect (two decimals), parts are the top eight parts
- * under it by cell count, each { name, share } with share a whole percentage of
- * the rect's cells inside the panel. panel is null when the rect misses every panel.
+ * fractions of the panel rect (two decimals), parts are the top eight part
+ * groups under it by cell count (names that differ only by a trailing numeric
+ * segment are summed into one group, see partGroup), each { name, share } with
+ * share a whole percentage of the rect's cells inside the panel, at least 1. panel is null when the rect misses every panel.
  */
 export function partsInRect(map, rect) {
   const cx = rect[0] + rect[2] / 2, cy = rect[1] + rect[3] / 2;
@@ -64,11 +68,17 @@ export function partsInRect(map, rect) {
     total++;
     if (id) counts.set(id, (counts.get(id) || 0) + 1);
   }
-  const parts = [...counts]
-    .map(([id, n]) => ({ name: panel.parts[id - 1] ?? `part-${id}`, n }))
+  // Numbered siblings (boy.hair.19, boy.hair.43) count as one group (boy.hair).
+  const groups = new Map();
+  for (const [id, n] of counts) {
+    const name = partGroup(panel.parts[id - 1] ?? `part-${id}`);
+    groups.set(name, (groups.get(name) || 0) + n);
+  }
+  const parts = [...groups]
+    .map(([name, n]) => ({ name, n }))
     .sort((a, b) => b.n - a.n || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
     .map(({ name, n }) => ({ name, share: Math.round(100 * n / total) }))
-    .filter(q => q.share > 0)
+    .filter(q => q.share >= 1)
     .slice(0, MAX_PARTS);
   return { panel: panel.id, region, parts };
 }
