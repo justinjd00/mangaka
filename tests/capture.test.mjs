@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -48,7 +48,7 @@ test('capture and sheet write PNGs, check passes without a fingerprint', { skip:
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('fingerprint compares two builds of a page file', () => {
+test('fingerprint compares two builds of a page file', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'mangaka-fp-'));
   try {
     const kit = new URL('../kit/', import.meta.url).href;
@@ -58,5 +58,35 @@ test('fingerprint compares two builds of a page file', () => {
     const r = run('fingerprint.mjs', join(dir, 'page.mjs'));
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /identical/);
+    assert.deepEqual(readdirSync(dir), ['page.mjs'], 'fingerprint writes no build output');
+    const snap = () => readdirSync(dir).map(f => [f, statSync(join(dir, f)).mtimeMs]);
+    const before = snap();
+    const spec = (await import(join(dir, 'page.mjs'))).default;
+    const out = buildPage(spec, { dir, write: false });
+    assert.ok(out.svg.length > 0);
+    assert.deepEqual(snap(), before, 'buildPage with write: false writes nothing');
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('screenshot removes a stale file and fails when Chrome fails', { skip: process.platform === 'win32' && 'needs a shell script' }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'mangaka-fake-'));
+  const saved = process.env.CHROME_PATH;
+  try {
+    const fake = join(dir, 'fake-chrome');
+    writeFileSync(fake, '#!/bin/sh\necho "fake chrome broke" >&2\nexit 1\n', { mode: 0o755 });
+    const out = join(dir, 'out.png');
+    writeFileSync(out, 'stale');
+    process.env.CHROME_PATH = fake;
+    const { screenshot } = await import('../scripts/chrome.mjs');
+    assert.throws(() => screenshot({ url: 'about:blank', out, width: 10, height: 10 }), /Chrome exited with 1: fake chrome broke/);
+    assert.ok(!existsSync(out), 'stale screenshot removed');
+    // Exit 0 without writing a file is a failure too.
+    writeFileSync(fake, '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+    writeFileSync(out, 'stale');
+    assert.throws(() => screenshot({ url: 'about:blank', out, width: 10, height: 10 }), /Chrome wrote no screenshot/);
+    assert.ok(!existsSync(out));
+  } finally {
+    if (saved === undefined) delete process.env.CHROME_PATH; else process.env.CHROME_PATH = saved;
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

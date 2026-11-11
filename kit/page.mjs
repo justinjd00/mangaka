@@ -165,11 +165,12 @@ const strokeCounts = (k, effects) => ({
 
 /**
  * Build a page. Returns { svg, html, map, stats }; when `dir` is given, model
- * paths resolve against it and the four files are written there.
+ * paths resolve against it and the four files are written there, unless
+ * `write` is false (then nothing is written).
  * onPanel({ id, ms }) is called after each panel (timing never reaches the files).
  * cacheDir is accepted for the panel cache of a later version and ignored.
  */
-export function buildPage(spec, { dir = null, cacheDir = null, onPanel = null } = {}) {
+export function buildPage(spec, { dir = null, cacheDir = null, onPanel = null, write = true } = {}) {
   void cacheDir;
   const page = definePage(spec);
   const [PW, PH] = page.size;
@@ -242,7 +243,7 @@ export function buildPage(spec, { dir = null, cacheDir = null, onPanel = null } 
   const map = { size: [PW, PH], reading: page.reading, panels: built.map(b => b.map), lettering };
   const stats = { svgBytes: Buffer.byteLength(svg), panels: built.map(b => b.stats) };
 
-  if (dir) {
+  if (dir && write) {
     writeFileSync(join(dir, 'page.svg'), svg);
     writeFileSync(join(dir, 'page.html'), html);
     writeFileSync(join(dir, 'page.map.json'), JSON.stringify(map) + '\n');

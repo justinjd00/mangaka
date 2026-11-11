@@ -6,12 +6,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 
-/** Build `pageFile` twice in separate processes (no cache, nothing written) and compare. */
+/** Build `pageFile` twice in separate processes (no cache, `write: false`, so build output is never touched) and compare. */
 export function fingerprint(pageFile) {
   const code = `import { buildPage } from ${JSON.stringify(new URL('../kit/page.mjs', import.meta.url).href)};` +
     `import { createHash } from 'node:crypto';` +
     `const spec = (await import(${JSON.stringify(pathToFileURL(resolve(pageFile)).href)})).default;` +
-    `process.stdout.write(createHash('sha256').update(buildPage(spec, { dir: ${JSON.stringify(dirname(resolve(pageFile)))} }).svg).digest('hex'));`;
+    `process.stdout.write(createHash('sha256').update(buildPage(spec, { dir: ${JSON.stringify(dirname(resolve(pageFile)))}, write: false }).svg).digest('hex'));`;
   const run = () => {
     const r = spawnSync(process.execPath, ['--input-type=module', '-e', code], { encoding: 'utf8', maxBuffer: 1 << 26 });
     if (r.status !== 0) throw new Error(`build failed: ${(r.stderr || '').trim().split('\n').slice(-2).join(' ')}`);

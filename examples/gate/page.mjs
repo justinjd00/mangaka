@@ -24,7 +24,7 @@ const lightFor = (yaw, side = -0.45, upk = 0.55) => {
 };
 const closeLight = (yaw, target, side, upk) => ({ dir: lightFor(yaw, side, upk), target, scale: 700, bias: 0.006 });
 
-const close = resolveStyle('seinen-dense', { depthK: 0.3, toneMats: ['sky', 'skin', 'tex', 'fabric'] });
+const close = resolveStyle('seinen-dense', { depthK: 0.3, toneMats: ['sky', 'skin', 'tex', 'fabric'], balance: { black: [0.04, 0.6] } });
 const tight = { aoRadius: 0.02 };
 
 const stand = POSES.stand;
