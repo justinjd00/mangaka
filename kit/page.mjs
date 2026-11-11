@@ -4,6 +4,7 @@ import { writeFileSync, readFileSync, readdirSync, mkdirSync, renameSync, rmSync
 import { resolve as resolvePath, join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { renderPanel } from './shade.mjs';
 import { inkPanel } from './ink.mjs';
 import { resolveStyle } from './styles.mjs';
@@ -202,16 +203,31 @@ const strokeCounts = (k, effects) => ({
 const CACHE_VERSION = 1;
 const sha256 = data => createHash('sha256').update(data).digest('hex');
 
-let kitPrint = null;
-/** SHA-256 over every kit/*.mjs file, once per process. */
-function kitFingerprint() {
-  if (kitPrint) return kitPrint;
-  const kitDir = new URL('.', import.meta.url);
+/**
+ * SHA-256 over every .mjs file under `root`, subdirectories included, in
+ * sorted relative-path order. The panel cache keys on it for the kit directory,
+ * so an edit anywhere in kit/ (kit/parts too) invalidates cached panels.
+ */
+export function treeFingerprint(root) {
+  const files = [];
+  const walk = rel => {
+    for (const e of readdirSync(join(root, rel), { withFileTypes: true })) {
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) walk(r);
+      else if (e.isFile() && e.name.endsWith('.mjs')) files.push(r);
+    }
+  };
+  walk('');
+  files.sort();
   const h = createHash('sha256');
-  for (const f of readdirSync(kitDir).filter(f => f.endsWith('.mjs')).sort()) {
-    h.update(f + '\0').update(readFileSync(new URL(f, kitDir))).update('\0');
-  }
-  return (kitPrint = h.digest('hex'));
+  for (const f of files) h.update(f + '\0').update(readFileSync(join(root, f))).update('\0');
+  return h.digest('hex');
+}
+
+let kitPrint = null;
+/** Fingerprint of the kit source tree, once per process. */
+function kitFingerprint() {
+  return (kitPrint ??= treeFingerprint(fileURLToPath(new URL('.', import.meta.url))));
 }
 
 class Uncacheable extends Error {}

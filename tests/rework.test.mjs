@@ -230,3 +230,22 @@ test('rework.mjs warns about panels it cannot cache instead of counting them', (
     assert.match(rw.stderr, /^warning: panel b is not cacheable and was rebuilt \(background is a function with no description\)$/m);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('the kit fingerprint covers subdirectories such as kit/parts', async () => {
+  const { treeFingerprint } = await import('../kit/page.mjs');
+  const { mkdirSync } = await import('node:fs');
+  const root = mkdtempSync(join(tmpdir(), 'mangaka-kitprint-'));
+  try {
+    mkdirSync(join(root, 'parts'));
+    writeFileSync(join(root, 'a.mjs'), 'export const a = 1;\n');
+    writeFileSync(join(root, 'parts', 'b.mjs'), 'export const b = 0.5;\n');
+    writeFileSync(join(root, 'notes.txt'), 'ignored');
+    const one = treeFingerprint(root);
+    assert.match(one, /^[0-9a-f]{64}$/);
+    assert.equal(treeFingerprint(root), one);
+    writeFileSync(join(root, 'notes.txt'), 'still ignored');
+    assert.equal(treeFingerprint(root), one);
+    writeFileSync(join(root, 'parts', 'b.mjs'), 'export const b = 0.6;\n');
+    assert.notEqual(treeFingerprint(root), one);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
