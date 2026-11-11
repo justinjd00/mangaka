@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
 import { loadVRM, poseVRM, partNamer } from '../kit/vrm.mjs';
 import { rasterMesh } from '../kit/mesh.mjs';
 import { makeCam } from '../kit/raster.mjs';
 import { POSES } from '../kit/poses.mjs';
 
-const model = loadVRM(new URL('../models/fumiriya.vrm', import.meta.url).pathname);
+const model = loadVRM(fileURLToPath(new URL('../models/fumiriya.vrm', import.meta.url)));
 const { posed, bonePos } = poseVRM(model, { pose: POSES.stand });
 const namer = partNamer('a');
 const ids = new Map();

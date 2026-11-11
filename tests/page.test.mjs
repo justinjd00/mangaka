@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import * as S from '../kit/sdf.mjs';
 import { definePage, buildPage, decodeMap } from '../kit/page.mjs';
 import { gradient, speedLines } from '../kit/backgrounds.mjs';
 import { rain, snow, spatter } from '../kit/effects.mjs';
 import { caption, bubble, sfx } from '../kit/lettering.mjs';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 const ballScene = () => {
   const sc = S.scene();

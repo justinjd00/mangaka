@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { loadVRM, poseVRM, partNamer } from '../kit/vrm.mjs';
 import { POSES } from '../kit/poses.mjs';
 
-const MODEL = new URL('../models/fumiriya.vrm', import.meta.url).pathname;
+const MODEL = fileURLToPath(new URL('../models/fumiriya.vrm', import.meta.url));
 const model = loadVRM(MODEL);
 
 test('loads a VRM with metadata and a humanoid skeleton', () => {

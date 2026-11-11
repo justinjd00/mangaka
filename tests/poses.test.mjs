@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
 import { loadVRM, poseVRM } from '../kit/vrm.mjs';
 import { HANDS, POSES, withHands, mirrorPose, mixPose } from '../kit/poses.mjs';
 
-const model = loadVRM(new URL('../models/fumiriya.vrm', import.meta.url).pathname);
+const model = loadVRM(fileURLToPath(new URL('../models/fumiriya.vrm', import.meta.url)));
 
 test('library has the documented names', () => {
   assert.deepEqual(Object.keys(HANDS), ['open', 'relaxed', 'fist', 'point', 'grip', 'hilt']);

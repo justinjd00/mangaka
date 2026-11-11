@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import * as S from '../kit/sdf.mjs';
 import * as armor from '../kit/parts/armor.mjs';
 import * as weapons from '../kit/parts/weapons.mjs';
@@ -14,7 +15,7 @@ import { loadVRM, poseVRM } from '../kit/vrm.mjs';
 import { POSES, withHands } from '../kit/poses.mjs';
 import { buildPage } from '../kit/page.mjs';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const MODEL = join(ROOT, 'models/shino.vrm');
 const model = loadVRM(MODEL);
 

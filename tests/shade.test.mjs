@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
 import * as S from '../kit/sdf.mjs';
 import { renderPanel } from '../kit/shade.mjs';
 import { toneOf, MATERIALS } from '../kit/materials.mjs';
@@ -8,7 +9,7 @@ import { loadVRM, poseVRM } from '../kit/vrm.mjs';
 import { POSES } from '../kit/poses.mjs';
 import { project } from '../kit/raster.mjs';
 
-const model = loadVRM(new URL('../models/fumiriya.vrm', import.meta.url).pathname);
+const model = loadVRM(fileURLToPath(new URL('../models/fumiriya.vrm', import.meta.url)));
 const { posed } = poseVRM(model, { pose: POSES.stand });
 const ctx = over => ({ lam: 0.5, fill: 0.2, rim: 0.1, nz: 0.8, ao: 1, spec: 0, lum: 0.8, wy: 0.2, skinMean: 0.8, hairMean: 0.5, ...over });
 
