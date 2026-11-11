@@ -87,3 +87,12 @@ test('captions and sound effects', () => {
   assert.equal(css.match(/@font-face/g).length, 2);
   assert.match(css, /data:font\/woff2;base64,d09GMg/);
 });
+
+test('a thought bubble trails three shrinking circles ending on its tail point', () => {
+  const out = layoutLettering(bubble({ kind: 'thought', text: 'Maybe.', at: [0.5, 0.3], tail: [0.25, 0.75] }), frame);
+  const circles = [...out.svg.matchAll(/<circle cx="([-\d.]+)" cy="([-\d.]+)" r="([\d.]+)"/g)].map(m => m.slice(1).map(Number));
+  assert.equal(circles.length, 3);
+  assert.deepEqual(circles[2].slice(0, 2), [200, 275]);
+  assert.ok(circles[0][2] > circles[1][2] && circles[1][2] > circles[2][2]);
+  assert.doesNotMatch(out.svg, /<path d="M[^"]*L200 275/, 'no wedge tail on a thought bubble');
+});
