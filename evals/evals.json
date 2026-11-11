@@ -1,0 +1,35 @@
+{
+  "skill_name": "mangaka",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Make me a single manga panel: a girl sitting alone on a park bench at night under a lantern, looking down at her phone, sad. Black and white, wide panel for the top of a page.",
+      "expected_output": "One page folder with a page.mjs that defines a single wide panel, built with scripts/build.mjs into page.svg, page.html, page.map.json and page.stats.json. The girl is the bundled shino.vrm (or a model the user supplied), seated with POSES.sit, her root lowered onto a bench from kit/parts/props.mjs, a lantern from the same library beside her, an expression with sorrow, head bent down, a hand shaped to hold the phone (a small code-built prop attached to the hand bone with attachTo and boneFrame), and a dark night background. The ink style is chosen for a quiet beat (tone-soft or seinen-dense with tone on skin), the hair reads as black with a shine band, and the panel's black share lies inside the style's range. node scripts/check.mjs on the folder printed ok, a page capture and a 4x close-up of the hand and phone were made with scripts/capture.mjs, and both PNGs were opened and read: no gap between fingers and phone, face not hidden by hair.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "I want a full manga page, right to left: two friends meet at a train platform after years apart. One of them doesn't recognise the other at first. Five or six panels with dialogue.",
+      "expected_output": "Before any geometry, a script in words: the beat in one sentence, five or six panels each with shot size, camera angle, expressions and every line of dialogue, read right to left. A platform set built from the parts library and the forms in kit/sdf.mjs (floor slab, platform edge, railing or wall, a bench, at least three objects that say train station), every part named. Both characters from VRM models, placed once with root positions, and each panel a camera on that one scene, with at least three shot sizes and no two neighbouring panels the same. Cameras on the close panels aim at bones. One panel is clearly the largest. Lettering uses bubble and caption from kit/lettering.mjs, listed in reading order, tails aimed at the speakers' head bones, no balloon over a face or hand. node scripts/check.mjs <dir> --page <dir>/page.mjs printed ok and a stable fingerprint; scripts/sheet.mjs wrote a contact sheet; the page PNG and the sheet were read, and the agent named what it fixed in one batch after that inspection.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Here's my own character, I made her in VRoid: ./models/aoi.vrm. Can you put her in a two-panel manga strip where she walks into a classroom and waves?",
+      "expected_output": "The agent first read the file's VRM metadata with loadVRM(path).meta, reported title, author and licence fields to the user, and confirmed the user made the model; it did not copy the model into the skill's models/ folder. If the file was VRM 1.0, it stopped and explained how to export VRM 0.x from VRoid Studio. Otherwise a test close-up of her face with a neutral expression and with joy was built and read before the strip. The strip has two panels: a wide or full shot of her entering (POSES.walk) in a classroom set made from code-built parts, and a medium shot of her waving (one arm raised, hand open, expression joy), framed with a camera function on her bones. If her hair is pale, the actor uses hair: 'light'. check.mjs printed ok, captures of both panels and a close-up of the waving hand were read.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "/mangaka rework examples/gate/page.mjs\npanel: resolve   region: [0.19, 0.15, 0.25, 0.41]\nparts: boy.hair (48%), boy.skin (44%), boy.EyeIris (3%), boy.FaceEyeline (2%), boy.EyeWhite (1%), boy.FaceBrow (1%)\nrequest: make the eyes darker",
+      "expected_output": "The agent converted the region to panel pixels (about [165, 56, 217, 152] of the 868 by 370 resolve panel), classified the request as an ink change, and added one entry to that panel's regions, such as { rect: [160, 55, 220, 150], feather: 10, set: { black: 0.7 } }, changing nothing else. node scripts/rework.mjs examples/gate/page.mjs --panel resolve reported resolve rebuilt and every other panel cached. node scripts/diff.mjs examples/gate --panel resolve --region 0.19,0.15,0.25,0.41 --margin 60 ended with ok: every change lies inside the grown region. Before and after captures of the resolve panel were made with scripts/capture.mjs and read, and the agent reported that the eyes and brows now carry more solid black while the rest of the page is byte-identical.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Action page please: a boy with a sword charges an armoured knight and the knight blocks with his shield. Make it feel fast. Diagonal panels are fine.",
+      "expected_output": "A page in the shonen-clean style (or a justified alternative) with four to six panels, at least one with a clip polygon for a diagonal cut, speed lines or focus lines from kit/backgrounds.mjs behind the motion panels, and sound effects from sfx() rotated and placed near their source. The knight is built from kit/parts/armor.mjs and kit/parts/weapons.mjs with at least 40 named parts (or the gate knight reused). The boy's sword is attached to his right hand bone with attachTo(sc, boneFrame(null, actors.boy.result, 'rightHand'), ...) inside a scene function, the hand closed with HANDS.hilt, the blade sized to the boy, so it follows the pose in every panel. Poses use POSES.run or a pose built from it for the charge and a strike pose for the hit; the blade meets the shield without passing through it. A shout bubble aims at the boy's head. check.mjs printed ok; the page, the contact sheet and a 4x close-up of the sword grip were read, with no gap between fingers and grip.",
+      "files": []
+    }
+  ]
+}

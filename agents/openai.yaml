@@ -1,0 +1,3 @@
+interface:
+  display_name: "mangaka"
+  short_description: "Build lettered black-and-white manga pages from 3D scenes and VRM characters"
