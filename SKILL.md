@@ -1,6 +1,7 @@
 ---
 name: mangaka
-description: Build lettered black-and-white manga pages as SVG. Scenes are modelled in code (distance-field forms and a parts library: armour, weapons, architecture, props) and characters come from VRM models, including the user's own VRoid characters; every panel is a camera on that scene, inked by rule into screentone, solid blacks, hatching and brush outlines, then lettered with speech bubbles, captions and sound effects. Each page ships with a viewer where the reader drags a rectangle over any region and gets a rework instruction for that spot. Use this whenever someone asks for a manga page, a comic page, a manga panel, a storyboard, a character scene, a webcomic page in black and white, or an ink illustration of a character, even if they never say "manga".
+description: >-
+  Build lettered black-and-white manga pages as SVG. Scenes are modelled in code (distance-field forms and a parts library: armour, weapons, architecture, props) and characters come from VRM models, including the user's own VRoid characters; every panel is a camera on that scene, inked by rule into screentone, solid blacks, hatching and brush outlines, then lettered with speech bubbles, captions and sound effects. Each page ships with a viewer where the reader drags a rectangle over any region and gets a rework instruction for that spot. Use this whenever someone asks for a manga page, a comic page, a manga panel, a storyboard, a character scene, a webcomic page in black and white, or an ink illustration of a character, even if they never say "manga".
 license: MIT
 compatibility: Written for Claude Code; also runs in Codex, OpenCode, Antigravity and MiniMax Code. Needs Node.js 20.10+, and Chrome or Chromium for the screenshot checks.
 metadata:
