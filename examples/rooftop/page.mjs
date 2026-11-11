@@ -30,6 +30,12 @@ const faceLight = (yaw, target, side = 0.3, scale = 700) => {
 const girlHead = [0.5, 1.3, 0.05], boyHead = [-0.5, 1.4, 0.05];
 const sky = gradient(0.52, 0);
 const up = (p, d) => [p[0], p[1] + d, p[2]];
+// The back of his vest is a dark texture with baked wrinkle shading; under the
+// fabric material its tone sits right at tone-soft's black threshold (0.86), so
+// texture noise flipped between black and tone and left blotches (not shadows:
+// they stayed with shadows and AO switched off). Over his back and legs in the
+// over-the-shoulder panel a higher black threshold keeps that cloth in screentone.
+const backOfBoy = { rect: [36, 112, 196, 318], feather: 8, set: { black: 0.93 } };
 
 export default definePage({
   size: [900, 1280], reading: 'rtl', style: 'tone-soft', title: 'Rooftop',
@@ -44,12 +50,12 @@ export default definePage({
       background: sky, light: faceLight(girlRoot.yaw + 0.6, girlHead) },
     { id: 'him', rect: [16, 440, 426, 380], ss: 1.4, scene: near,
       actors: [boy({ surprised: 0.9 })],
-      camera: ({ bones }) => ({ yaw: boyRoot.yaw - 0.6, pitch: 0.02, scale: 640, cx: 180, target: up(bones.boy.neck, 0.02) }),
-      background: sky, light: faceLight(boyRoot.yaw - 0.6, boyHead, -0.3) },
+      camera: ({ bones }) => ({ yaw: boyRoot.yaw - 0.2, pitch: -0.08, scale: 600, cx: 185, cy: 205, target: up(bones.boy.neck, 0.05) }),
+      background: sky, light: faceLight(boyRoot.yaw - 0.2, boyHead, -0.3) },
     { id: 'over', rect: [330, 834, 554, 430], ss: 1.3, scene: roof,
       actors: [boy(), girl({ joy: 0.35, sorrow: 0.25 })],
       camera: ({ bones }) => ({ yaw: girlRoot.yaw + 0.22, pitch: 0.05, scale: 420, cx: 330, cy: 210, target: up(bones.girl.neck, 0.0) }),
-      background: sky, light: faceLight(girlRoot.yaw + 0.22, [0, 1.2, 0.05], 0.3, 380) },
+      background: sky, light: faceLight(girlRoot.yaw + 0.22, [0, 1.2, 0.05], 0.3, 380), regions: [backOfBoy] },
     { id: 'close', rect: [16, 834, 300, 430], ss: 1.5, scene: near,
       actors: [girl({ fun: 0.7 })],
       camera: ({ bones }) => ({ yaw: girlRoot.yaw + 0.85, pitch: -0.04, scale: 1250, cx: 170, cy: 190, target: up(bones.girl.head, 0.05) }),

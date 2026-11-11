@@ -1,5 +1,5 @@
 {
-  "svgBytes": 450933,
+  "svgBytes": 441591,
   "panels": [
     {
       "id": "roof",
@@ -74,19 +74,19 @@
           0.45
         ]
       },
-      "black": 0.0833,
-      "tone": 0.6859,
-      "white": 0.2307,
+      "black": 0.0631,
+      "tone": 0.7296,
+      "white": 0.2073,
       "strokes": {
-        "tone1": 41,
-        "tone2": 48,
-        "blacks": 38,
+        "tone1": 42,
+        "tone2": 41,
+        "blacks": 39,
         "hatchThin": 0,
         "hatchMid": 0,
         "hatchCore": 0,
         "mail": 0,
         "dots": 0,
-        "brush": 399,
+        "brush": 422,
         "knockouts": 0,
         "lines": 0,
         "shapes": 0,
@@ -112,13 +112,13 @@
       "strokes": {
         "tone1": 84,
         "tone2": 89,
-        "blacks": 227,
+        "blacks": 139,
         "hatchThin": 22,
         "hatchMid": 1,
         "hatchCore": 0,
         "mail": 0,
         "dots": 0,
-        "brush": 1000,
+        "brush": 994,
         "knockouts": 0,
         "lines": 0,
         "shapes": 0,
