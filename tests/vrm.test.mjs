@@ -94,3 +94,11 @@ test('poseVRM gives a world rotation per bone that carries the root yaw', () => 
   const rest = poseVRM(model).boneRot.hips.map(v => Math.round(v * 1e6) / 1e6 + 0);
   assert.deepEqual(rest, [-1, 0, 0, 0, 1, 0, 0, 0, -1]);
 });
+
+test('skin: false poses the bones only, with the same bone frames', () => {
+  const full = poseVRM(model, { pose: POSES.stand, root: { pos: [0.2, 0, 0], yaw: 1 } });
+  const bones = poseVRM(model, { pose: POSES.stand, root: { pos: [0.2, 0, 0], yaw: 1 }, skin: false });
+  assert.deepEqual(bones.posed, []);
+  assert.deepEqual(bones.bonePos, full.bonePos);
+  assert.deepEqual(bones.boneRot, full.boneRot);
+});

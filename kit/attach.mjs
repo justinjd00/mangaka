@@ -11,8 +11,10 @@
 //              the thumb side (index finger), +Z to the little finger.
 //   leftHand:  -X runs along the fingers, -Y is the palm normal, -Z points to
 //              the thumb side, +Z to the little finger.
-// A grip held in a curled right hand therefore runs along Z, about 0.08 along
-// +X and 0.03 below the palm (-Y); a blade leaving the thumb side points to -Z.
+// A grip held in a right hand curled with HANDS.grip therefore runs along Z,
+// about 0.08 along +X and 0.012 below the palm (-Y); a blade leaving the thumb
+// side points to -Z (examples/duel places a sword with at [0.08, -0.012, 0] and
+// R rotX(-PI / 2)). Bones-only poses (poseVRM skin: false) are enough here.
 import * as S from './sdf.mjs';
 
 const isPoint = v => Array.isArray(v) && v.length === 3 && v.every(x => typeof x === 'number');

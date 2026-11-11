@@ -129,9 +129,10 @@ export function loadVRM(path) {
 /**
  * Pose a loaded model. pose maps humanoid bone names to Euler [x, y, z]
  * radians (or a quaternion [x, y, z, w]); expr maps blend shape names to
- * weights. Returns world-space vertices per primitive and bone positions.
+ * weights. Returns world-space vertices per primitive (none with skin: false,
+ * for bones only), bone positions and bone world rotations.
  */
-export function poseVRM(model, { pose = {}, expr = {}, root = null, flip = true } = {}) {
+export function poseVRM(model, { pose = {}, expr = {}, root = null, flip = true, skin = true } = {}) {
   const { j, parent, bones } = model;
   const n = j.nodes.length;
   const local = j.nodes.map(nd => ({ t: nd.translation || [0, 0, 0], q: nd.rotation || [0, 0, 0, 1], s: nd.scale || [1, 1, 1] }));
@@ -157,7 +158,7 @@ export function poseVRM(model, { pose = {}, expr = {}, root = null, flip = true 
 
   const rc = root ? cos(root.yaw || 0) : 1, rs = root ? sin(root.yaw || 0) : 0;
   const posed = [];
-  for (const p of model.prims) {
+  for (const p of skin ? model.prims : []) {
     const vc = p.pos.length / 3;
     let pos = p.pos, nrm = p.nrm, copied = false;
     p.targets.forEach((_, ti) => {
