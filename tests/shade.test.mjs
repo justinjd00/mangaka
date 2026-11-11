@@ -96,3 +96,17 @@ test('renderPanel rejects unknown materials and unnamed actors', () => {
   assert.throws(() => renderPanel({ scene: sc, cam }), /part "x": unknown material "glass"/);
   assert.throws(() => renderPanel({ actors: [{ model, posed }], cam }), /missing name/);
 });
+
+test('a light straight from above gives finite buffers and a shadow right under the ball', () => {
+  const sc = S.scene();
+  sc.add('ground', 'ground', S.box([0, -0.05, 0], [1.6, 0.05, 1.6]));
+  sc.add('ball', 'metal', S.sphere([0, 0.6, 0], 0.3));
+  const W = 200, H = 160;
+  const r = renderPanel({ scene: sc, background: flat(0), light: { dir: [0, 1, 0] },
+    cam: { yaw: 0, pitch: 0.5, scale: 80, cx: W / 2, cy: H / 2, W, H, target: [0, 0.3, 0] } });
+  assert.ok(r.D.every(Number.isFinite), 'tones are finite');
+  for (const k of ['nx', 'ny', 'nz']) assert.ok(r.nrm[k].every(Number.isFinite), k);
+  const toneAt = p => { const [sx, sy] = project(r.cam, p); const i = Math.round(sy) * W + Math.round(sx); assert.equal(r.buf.id[i], 1, `ground at ${p}`); return r.D[i]; };
+  const under = toneAt([0, 0, 0.1]), open = toneAt([1.1, 0, 0.1]);
+  assert.ok(under > open + 0.15, `shadow ${under} vs open ${open}`);
+});

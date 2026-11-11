@@ -11,7 +11,9 @@ export function makeCam({ yaw = 0, pitch = 0, scale, cx, cy, W, H, target = [0, 
 }
 export function lightCam(dir, target, scale, size) {
   const fwd = norm(dir);
-  const right = norm(cross([0, 1, 0], fwd));
+  // A light straight above or below has no horizontal component: take the frame from +Z instead.
+  const ref = Math.abs(fwd[1]) > 0.999 ? [0, 0, 1] : [0, 1, 0];
+  const right = norm(cross(ref, fwd));
   const up = cross(fwd, right);
   return { fwd, right, up, scale, cx: size / 2, cy: size / 2, W: size, H: size, target };
 }
