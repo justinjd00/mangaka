@@ -55,7 +55,7 @@ const swapSide = name => name.startsWith('left') ? 'right' + name.slice(4) : nam
 export function mirrorPose(pose) {
   const out = {};
   for (const [bone, r] of Object.entries(pose)) {
-    out[swapSide(bone)] = r.length === 4 ? [-r[0], r[1], r[2], r[3]] : [r[0], -r[1], -r[2]];
+    out[swapSide(bone)] = r.length === 4 ? [r[0], -r[1], -r[2], r[3]] : [r[0], -r[1], -r[2]];
   }
   return out;
 }
@@ -64,6 +64,7 @@ export function mirrorPose(pose) {
 export function mixPose(a, b, t) {
   const out = {};
   for (const bone of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (a[bone]?.length === 4 || b[bone]?.length === 4) throw new Error(`mixPose supports Euler poses only (bone ${bone})`);
     const p = a[bone] || [0, 0, 0], q = b[bone] || [0, 0, 0];
     out[bone] = [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t, p[2] + (q[2] - p[2]) * t];
   }

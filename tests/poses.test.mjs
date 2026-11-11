@@ -50,3 +50,25 @@ test('guard raises the fists above the stand pose hands', () => {
   assert.ok(guard.leftHand[1] > stand.leftHand[1] + 0.2);
   assert.ok(guard.rightHand[1] > stand.rightHand[1] + 0.2);
 });
+
+// Same convention as poseVRM: Rz * Ry * Rx.
+const qmul = (a, b) => [
+  a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+  a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+  a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+  a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2]];
+const qeuler = ([x, y, z]) => qmul([0, 0, Math.sin(z / 2), Math.cos(z / 2)], qmul([0, Math.sin(y / 2), 0, Math.cos(y / 2)], [Math.sin(x / 2), 0, 0, Math.cos(x / 2)]));
+
+test('mirrorPose on quaternions matches mirroring the Euler angles', () => {
+  for (const e of [[0.3, 0.5, 0.7], [-1.1, 0.2, 1.4], [0.9, -0.6, -0.2]]) {
+    const got = mirrorPose({ leftHand: qeuler(e) }).rightHand;
+    const want = qeuler([e[0], -e[1], -e[2]]);
+    const sign = got.reduce((s, v, i) => s + v * want[i], 0) < 0 ? -1 : 1;
+    got.forEach((v, i) => assert.ok(Math.abs(sign * v - want[i]) < 1e-9, `${e} component ${i}`));
+  }
+});
+
+test('mixPose rejects quaternion entries', () => {
+  assert.throws(() => mixPose({ head: [0, 0, 0, 1] }, { head: [0, 0, 0] }, 0.5), { message: 'mixPose supports Euler poses only (bone head)' });
+  assert.throws(() => mixPose({}, { spine: [0, 0, 0, 1] }, 0.5), { message: 'mixPose supports Euler poses only (bone spine)' });
+});
