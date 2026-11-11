@@ -9,7 +9,60 @@ import { hash32, rand01 } from './rng.mjs';
 import { resolveStyle } from './styles.mjs';
 
 const { abs, max, min, hypot, floor, ceil, cos, sin, pow, PI } = Math;
-const f1 = v => (Math.round(v * 10) / 10).toString();
+
+/**
+ * Compact path encoding: absolute M for the first point, relative l for the rest.
+ * Coordinates are rounded to one decimal of a buffer pixel below ss 1.5 and to whole
+ * buffer pixels from ss 1.5 (at most 0.67 page pixels after the 1/ss scale-down).
+ * Deltas come from the rounded absolute positions, so rounding never accumulates.
+ */
+export function encoder(ss = 1) {
+  const q = ss >= 1.5 ? 1 : 10;
+  const num = u => {
+    if (q === 1 || u % 10 === 0) return String(u / q);
+    const a = abs(u), i = floor(a / 10), f = a % 10;
+    return (u < 0 ? '-' : '') + (i ? i : '') + '.' + f;
+  };
+  const join = (a, b) => (b[0] === '-' ? a + b : a + ' ' + b);
+  const val = v => num(Math.round(v * q));
+  const path = (pts, close = false) => {
+    let px = Math.round(pts[0] * q), py = Math.round(pts[1] * q);
+    let body = '';
+    for (let i = 2; i < pts.length; i += 2) {
+      const x = Math.round(pts[i] * q), y = Math.round(pts[i + 1] * q);
+      if (x === px && y === py) continue;
+      body = join(body ? join(body, num(x - px)) : num(x - px), num(y - py));
+      px = x; py = y;
+    }
+    const s = 'M' + join(num(Math.round(pts[0] * q)), num(Math.round(pts[1] * q))) + (body ? 'l' + body : '');
+    return close ? s + 'z' : s;
+  };
+  return { q, num, val, path };
+}
+
+/** Sub-polyline between fractions a and b of the arc length. */
+function cutByLength(pts, a, b) {
+  const n = pts.length / 2, L = [0];
+  for (let i = 1; i < n; i++) L.push(L[i - 1] + hypot(pts[i * 2] - pts[i * 2 - 2], pts[i * 2 + 1] - pts[i * 2 - 1]));
+  const tot = L[n - 1], la = a * tot, lb = b * tot;
+  const at = l => {
+    let i = 1;
+    while (i < n - 1 && L[i] < l) i++;
+    const t = (l - L[i - 1]) / ((L[i] - L[i - 1]) || 1);
+    return [pts[i * 2 - 2] + t * (pts[i * 2] - pts[i * 2 - 2]), pts[i * 2 - 1] + t * (pts[i * 2 + 1] - pts[i * 2 - 1])];
+  };
+  const out = at(la);
+  for (let i = 1; i < n - 1; i++) if (L[i] > la && L[i] < lb) out.push(pts[i * 2], pts[i * 2 + 1]);
+  out.push(...at(lb));
+  return out;
+}
+
+/** Polyline length. */
+function lengthOf(pts) {
+  let l = 0;
+  for (let i = 2; i < pts.length; i += 2) l += hypot(pts[i] - pts[i - 2], pts[i + 1] - pts[i - 1]);
+  return l;
+}
 const sst = (a, b, x) => { const t = max(0, min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 /** Float in [0, 1) from a numeric base hash and up to four integers. */
@@ -41,6 +94,7 @@ export function inkPanel(r, { style = 'seinen-dense', seed, regions = [], ss = 1
   const N = W * H;
   const K = ss, DK = st.depthK;
   const toneSet = new Set(st.toneMats);
+  const enc = encoder(ss);
 
   // Per-part tables; index 0 is the background ("sky").
   const P1 = parts.length + 1;
@@ -120,16 +174,15 @@ export function inkPanel(r, { style = 'seinen-dense', seed, regions = [], ss = 1
 
   // Each hatch stroke is emitted three times (full, middle, core) so stacked widths taper it.
   const hatch = [[], [], []];
-  const seg = (pts, a, b) => {
-    let s = 'M' + f1(pts[a * 2]) + ' ' + f1(pts[a * 2 + 1]);
-    for (let i = a + 1; i < b; i++) s += 'L' + f1(pts[i * 2]) + ' ' + f1(pts[i * 2 + 1]);
-    return s;
-  };
+  // Short strokes are a single thin line; longer ones also get a mid and a core tier.
+  const MID = 12 * K, CORE = 28 * K;
   const emitStroke = pts => {
-    const m = pts.length / 2;
-    hatch[0].push(seg(pts, 0, m));
-    if (m >= 4) hatch[1].push(seg(pts, floor(m * 0.16), ceil(m * 0.84)));
-    if (m >= 7) hatch[2].push(seg(pts, floor(m * 0.33), ceil(m * 0.67)));
+    const thin = enc.path(pts);
+    if (!thin.includes('l')) return;
+    hatch[0].push(thin);
+    const L = lengthOf(pts);
+    if (L >= MID) hatch[1].push(enc.path(cutByLength(pts, 0.16, 0.84)));
+    if (L >= CORE) hatch[2].push(enc.path(cutByLength(pts, 0.33, 0.67)));
   };
   const tauOf = (p, k, u) => { const t = cfgs[p].thresholds[k]; return t[0] + u * (t[1] - t[0]); };
   const lenOf = (p, u) => { const l = cfgs[p].len; return (l[0] + u * (l[1] - l[0])) * K; };
@@ -193,7 +246,6 @@ export function inkPanel(r, { style = 'seinen-dense', seed, regions = [], ss = 1
         const maxLen = lenOf(p, rh(base, j, m, 4));
         const gap = 2 + floor(rh(base, j, m, 5) * 4);
         const w = (rh(base, j, m, 6) - 0.5) * 0.5, wx = -sa * w, wy = ca * w;
-        const pts = [ptx[n0] + wx, pty[n0] + wy];
         let n = n0, len = 0;
         for (;;) {
           const nn = n + 1;
@@ -201,10 +253,9 @@ export function inkPanel(r, { style = 'seinen-dense', seed, regions = [], ss = 1
           const i = pix[nn];
           if (i < 0 || id[i] !== p || !qualifies(i, u, 0.05)) break;
           n = nn; len++;
-          if (len % 3 === 0) pts.push(ptx[n] + wx, pty[n] + wy);
         }
-        if (len % 3 !== 0) pts.push(ptx[n] + wx, pty[n] + wy);
-        if (pts.length >= 6) emitStroke(pts);
+        // Scan strokes are straight: two points (the probe needed at least three samples, 6 px).
+        if (len >= 6) emitStroke([ptx[n0] + wx, pty[n0] + wy, ptx[n] + wx, pty[n] + wy]);
       }
     }
   };
@@ -268,7 +319,7 @@ export function inkPanel(r, { style = 'seinen-dense', seed, regions = [], ss = 1
       for (let i = b.length - 2; i >= 0; i -= 2) pts.push(b[i], b[i + 1]);
       pts.push(sx, sy);
       for (let i = 0; i < a.length; i += 2) pts.push(a[i], a[i + 1]);
-      emitStroke(pts);
+      emitStroke(rdp(pts, 0.35 * K));
     }
   };
 
@@ -281,11 +332,12 @@ export function inkPanel(r, { style = 'seinen-dense', seed, regions = [], ss = 1
 
   // Chain mail: rows of small arcs.
   const mail = [];
+  const mailArc = `${enc.val(2.1 * K)}${enc.val(-2.9 * K)} ${enc.val(4.2 * K)} 0`;
   for (let y = 2, row = 0; y < H - 2; y += 3.3 * K, row++)
     for (let x = 2 + (row % 2) * 2.2 * K; x < W - 3; x += 4.4 * K) {
       const i = floor(y) * W + floor(x);
       if (mats[id[i]] !== 'mail' || D[i] >= TB[i]) continue;
-      mail.push(`M${f1(x - 2.1 * K)} ${f1(y)}q${f1(2.1 * K)} ${f1(-2.9 * K)} ${f1(4.2 * K)} 0`);
+      mail.push(`M${enc.val(x - 2.1 * K)} ${enc.val(y)}q${mailArc}`);
     }
 
   // Grit dots on ground and stone: one candidate per cell.
@@ -299,16 +351,18 @@ export function inkPanel(r, { style = 'seinen-dense', seed, regions = [], ss = 1
       if (m !== 'ground' && m !== 'stone') continue;
       const d = D[i];
       if (d >= TB[i] || rh(base, cx, cy, 2) > d * 0.9) continue;
+      // A dot is a sub-pixel square of the same area as a disc of radius rr.
       const rr = (0.35 + rh(base, cx, cy, 3) * 0.55) * K;
-      dots.push(`M${f1(x - rr)} ${f1(y)}a${f1(rr)} ${f1(rr)} 0 1 0 ${f1(rr * 2)} 0a${f1(rr)} ${f1(rr)} 0 1 0 ${f1(-rr * 2)} 0`);
+      const sd = Math.round(rr * 17.7) / 10, h = sd / 2, sz = String(sd).replace(/^0\./, '.');
+      dots.push(`M${enc.val(x - h)} ${enc.val(y - h)}h${sz}v${sz}h-${sz}z`);
     }
   }
 
   const CW = W + 1;
-  const blacks = traceLoops(W, H, i => D[i] >= TB[i]);
+  const blacks = traceLoops(W, H, i => D[i] >= TB[i], enc);
   const isTone = i => toneSet.has(mats[id[i]]);
-  const tone1 = toneSet.size ? traceLoops(W, H, i => isTone(i) && D[i] >= T1[i]) : [];
-  const tone2 = toneSet.size ? traceLoops(W, H, i => isTone(i) && D[i] >= T2[i]) : [];
+  const tone1 = toneSet.size ? traceLoops(W, H, i => isTone(i) && D[i] >= T1[i], enc) : [];
+  const tone2 = toneSet.size ? traceLoops(W, H, i => isTone(i) && D[i] >= T2[i], enc) : [];
 
   // Brush outlines: filled shapes with a pressure profile.
   const brush = [];
@@ -343,10 +397,8 @@ export function inkPanel(r, { style = 'seinen-dense', seed, regions = [], ss = 1
       w *= 0.86 + 0.3 * wobble(ph + L[i] * 0.09);
       left.push(x - ty * w / 2, y + tx * w / 2); right.push(x + ty * w / 2, y - tx * w / 2);
     }
-    let s = 'M' + f1(left[0]) + ' ' + f1(left[1]);
-    for (let i = 1; i < n; i++) s += 'L' + f1(left[i * 2]) + ' ' + f1(left[i * 2 + 1]);
-    for (let i = n - 1; i >= 0; i--) s += 'L' + f1(right[i * 2]) + ' ' + f1(right[i * 2 + 1]);
-    brush.push(s + 'Z');
+    for (let i = n - 1; i >= 0; i--) left.push(right[i * 2], right[i * 2 + 1]);
+    brush.push(enc.path(left, true));
   };
   {
     // Edge classes between neighbouring pixels: 1 crease, 2 inner edge, 3 silhouette.
@@ -410,11 +462,12 @@ export function inkPanel(r, { style = 'seinen-dense', seed, regions = [], ss = 1
     for (let n = 0; n < total; n++) for (let d = 0; d < 2; d++) if (ecls(n, d) && !evis(n, d)) follow(n, d);
   }
 
-  return { tone1, tone2, blacks, hatch, mail, dots, brush, decals: inkDecals(r, K, DK, TB) };
+  return { tone1, tone2, blacks, hatch, mail, dots, brush, decals: inkDecals(r, K, DK, TB, enc) };
 }
 
 /** Project decals (lines, polys, rivets, holes, strands) with a depth test. */
-function inkDecals(r, K, DK, TB) {
+function inkDecals(r, K, DK, TB, enc) {
+  const pathOf = enc.path;
   const { W, H, D, cam, aux } = r, dp = r.buf.depth;
   const dec = { ko: [], lines: [[], [], []], shapes: [], strandsWhite: [], strandsBlack: [], rivets: [], holes: [] };
   const vis = (q, tol = 0.014 * DK) => {
@@ -475,11 +528,6 @@ function inkDecals(r, K, DK, TB) {
 
 // ---- Geometry helpers -------------------------------------------------------
 
-const pathOf = (pts, close) => {
-  let s = 'M' + f1(pts[0]) + ' ' + f1(pts[1]);
-  for (let i = 2; i < pts.length; i += 2) s += 'L' + f1(pts[i]) + ' ' + f1(pts[i + 1]);
-  return close ? s + 'Z' : s;
-};
 
 function smoothClosed(pts, it) {
   const n = pts.length / 2;
@@ -543,7 +591,7 @@ function rdpClosed(ring, eps) {
 }
 
 /** Boundaries of the pixel mask `inside(i)` as smoothed closed paths (outer and hole loops). */
-function traceLoops(W, H, inside) {
+function traceLoops(W, H, inside, enc) {
   const CW = W + 1, N = W * H;
   const loops = [];
   const out = new Uint8Array(CW * (H + 1));
@@ -575,7 +623,7 @@ function traceLoops(W, H, inside) {
       if (pts.length / 2 < 10) continue;
       const sm = smoothClosed(Float32Array.from(pts), 3);
       const simp = rdpClosed(Array.from(sm), 0.32);
-      if (simp.length >= 8) loops.push(pathOf(simp, true));
+      if (simp.length >= 8) loops.push(enc.path(simp, true));
     }
   }
   return loops;

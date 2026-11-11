@@ -4,6 +4,7 @@ import * as S from '../kit/sdf.mjs';
 import { renderPanel } from '../kit/shade.mjs';
 import { inkPanel } from '../kit/ink.mjs';
 import { gradient } from '../kit/backgrounds.mjs';
+import { encoder } from '../kit/ink.mjs';
 
 // Two spheres 400 px apart on a graded sky.
 const W = 600, H = 240;
@@ -29,16 +30,21 @@ const layers = k => {
   };
   return out;
 };
-// Bounding box of a path: absolute M/L pairs; for relative commands only the first point (grown by 6 px).
+// Bounding box of a path in the compact format: absolute M, then relative l deltas.
+// Mail (q) and dots (h/v) use their first point grown by 8 px.
+const NUM = /-?(?:\d+(?:\.\d*)?|\.\d+)/g;
 const bbox = s => {
   if (s.startsWith('[')) { const [x, y, r] = JSON.parse(s); return [x - r, y - r, x + r, y + r]; }
   if (s.startsWith('{')) s = JSON.parse(s).d;
-  const relative = /[a-z]/.test(s);
-  const nums = s.match(/-?\d+(\.\d+)?/g).map(Number);
-  const pts = relative ? nums.slice(0, 2) : nums;
-  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-  for (let i = 0; i + 1 < pts.length; i += 2) { x0 = Math.min(x0, pts[i]); x1 = Math.max(x1, pts[i]); y0 = Math.min(y0, pts[i + 1]); y1 = Math.max(y1, pts[i + 1]); }
-  return relative ? [x0 - 6, y0 - 6, x1 + 6, y1 + 6] : [x0, y0, x1, y1];
+  const n = s.match(NUM).map(Number);
+  let x = n[0], y = n[1];
+  if (/[qhv]/.test(s)) return [x - 8, y - 8, x + 8, y + 8];
+  let x0 = x, y0 = y, x1 = x, y1 = y;
+  for (let i = 2; i + 1 < n.length; i += 2) {
+    x += n[i]; y += n[i + 1];
+    x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+  }
+  return [x0, y0, x1, y1];
 };
 const changed = (a, b) => {
   const out = [];
@@ -56,7 +62,7 @@ test('inkPanel is deterministic and every layer is filled', () => {
   const b = inkPanel(base, { style: 'seinen-dense', seed: 'p1' });
   assert.deepEqual(a, b);
   for (const name of ['blacks', 'thin', 'mid', 'core', 'brush', 'rivets']) assert.ok(layers(a)[name].length > 0, name);
-  for (const s of a.brush) assert.match(s, /^M[-\d. L]+Z$/);
+
 });
 
 test('the seed changes the hatching', () => {
@@ -111,4 +117,44 @@ test('ss scales stroke weights and spacing', () => {
 
 test('inkPanel requires a string seed', () => {
   assert.throws(() => inkPanel(base, { style: 'seinen-dense' }), /seed/);
+});
+
+// Strict compact format: no leading zeros, no trailing ".0", no "-0".
+const N = String.raw`-?(?:(?:0|[1-9]\d*)(?:\.[1-9])?|\.[1-9])`;
+const SEP = String.raw`(?: |(?=-))`;
+const PATH = new RegExp(String.raw`^M${N}${SEP}${N}(?:l${N}(?:${SEP}${N})*)?z?$`);
+const MAIL = new RegExp(String.raw`^M${N} ${N}q${N}${SEP}${N} ${N} 0$`);
+const DOT = new RegExp(String.raw`^M${N} ${N}h${N}v${N}h-${N}z$`);
+
+test('encoder: relative deltas from rounded positions, shortest numbers', () => {
+  const e1 = encoder(1), e2 = encoder(1.5);
+  assert.equal(e1.path([0.04, 10, 1.26, 10.5, 2.5, 9.96]), 'M0 10l1.3 .5 1.2-.5');
+  assert.equal(e2.path([0.4, 10, 1.6, 10.5, 2.5, 9.6, 2.6, 9.6], true), 'M0 10l2 1 1-1z');
+  assert.equal(e2.path([3.2, 4.4, 3.4, 4.1]), 'M3 4');
+  // Long chains do not drift: the end point is the rounded absolute end.
+  const pts = [];
+  for (let i = 0; i <= 200; i++) pts.push(i * 1.37, i * 0.73);
+  const n = e1.path(pts).match(NUM).map(Number);
+  let x = 0, y = 0;
+  for (let i = 0; i < n.length; i += 2) { x += n[i]; y += n[i + 1]; }
+  assert.ok(Math.abs(x - 274) < 1e-6 && Math.abs(y - 146) < 1e-6, `${x} ${y}`);
+});
+
+test('every path is in the compact format and hatch stays cheap per stroke', () => {
+  for (const ss of [1, 1.5]) {
+    const k = inkPanel(base, { style: 'seinen-dense', seed: 'p1', ss });
+    const L = layers(k);
+    let total = 0;
+    for (const [name, list] of Object.entries(L)) for (const s of list) {
+      total += s.length;
+      if (name === 'rivets' || name === 'holes') continue;
+      const d = name === 'shapes' ? JSON.parse(s).d : s;
+      const re = name === 'mail' ? MAIL : name === 'dots' ? DOT : PATH;
+      assert.match(d, re, `${name} at ss ${ss}`);
+    }
+    // All ink bytes per hatch stroke. Measured on this panel: 42.3 at ss 1 (one decimal),
+    // 27.3 at ss 1.5 (integers); bounds leave about 25% headroom.
+    const per = total / k.hatch[0].length;
+    assert.ok(per < (ss === 1 ? 53 : 34), `ss ${ss}: ${per.toFixed(1)} bytes per hatch stroke`);
+  }
 });
