@@ -321,6 +321,7 @@ function layoutBubble(item, f, text, cx, cy, frame) {
   const svg = tailSvg + body + cover + `<g ${textAttrs(f, size)} text-anchor="middle" fill="#000">${tb.svg}</g>`;
   const pad = kind === 'shout' ? 26 : kind === 'thought' ? 12 : 2;
   const box = [cx - rx - pad, cy - ry - pad, cx + rx + pad, cy + ry + pad];
+  const bodyBox = [...box];
   if (tip) { box[0] = min(box[0], tip[0]); box[1] = min(box[1], tip[1]); box[2] = max(box[2], tip[0]); box[3] = max(box[3], tip[1]); }
-  return { svg, lines: tb.lines, box, ellipse: { cx, cy, rx, ry }, tip };
+  return { svg, lines: tb.lines, box, bodyBox, ellipse: { cx, cy, rx, ry }, tip };
 }

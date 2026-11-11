@@ -108,6 +108,25 @@ test('map rle decodes to half-resolution panel pixels with valid part ids', () =
   }
 });
 
+test('map carries reading order and lettering boxes; stats carry style and balance', () => {
+  const { map, stats } = built();
+  assert.equal(map.reading, 'rtl');
+  assert.deepEqual(Object.keys(map), ['size', 'reading', 'panels', 'lettering']);
+  assert.deepEqual(map.lettering.map(l => [l.index, l.type, l.kind, l.panel]), [[0, 'caption', null, 'a'], [1, 'bubble', 'shout', 'b'], [2, 'sfx', null, null]]);
+  for (const l of map.lettering) {
+    assert.equal(l.box.length, 4);
+    assert.ok(l.box.every(Number.isFinite) && l.box[2] > 0 && l.box[3] > 0, JSON.stringify(l));
+  }
+  // The balloon box is centred on `at` (the tail does not stretch it).
+  const bub = map.lettering[1].box;
+  assert.ok(Math.abs(bub[0] + bub[2] / 2 - (162 + 0.5 * 92)) < 0.2 && Math.abs(bub[1] + bub[3] / 2 - (6 + 0.3 * 101)) < 0.2, JSON.stringify(bub));
+  for (const p of stats.panels) {
+    assert.equal(p.style, 'seinen-dense');
+    assert.deepEqual(p.balance, { black: [0.12, 0.6] });
+    assert.deepEqual(Object.keys(p).slice(0, 4), ['id', 'style', 'balance', 'black']);
+  }
+});
+
 test('actors: models load relative to dir, poses by name, cameras and tails follow bones', () => {
   const dir = mkdtempSync(join(tmpdir(), 'mangaka-actor-'));
   const spec = {

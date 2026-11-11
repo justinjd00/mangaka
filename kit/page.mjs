@@ -15,6 +15,7 @@ import { layoutLettering, checkLettering, fontCss, fontsOf } from './lettering.m
 const { round, ceil, min } = Math;
 const f1 = v => String(round(v * 10) / 10);
 const f2 = v => String(round(v * 100) / 100);
+const r1 = v => round(v * 10) / 10;
 const r4 = v => round(v * 10000) / 10000;
 const isNum = v => typeof v === 'number' && Number.isFinite(v);
 const isVec = (v, n) => Array.isArray(v) && v.length === n && v.every(isNum);
@@ -204,7 +205,7 @@ export function buildPage(spec, { dir = null, cacheDir = null, onPanel = null } 
     let black = 0, tone = 0;
     for (let i = 0; i < r.D.length; i++) { const v = r.D[i]; if (v >= style.black) black++; else if (v >= style.tone1) tone++; }
     const N = r.D.length;
-    const stats = { id: p.id, black: r4(black / N), tone: r4(tone / N), white: r4((N - black - tone) / N), strokes: strokeCounts(k, effects) };
+    const stats = { id: p.id, style: style.name ?? null, balance: style.balance ?? null, black: r4(black / N), tone: r4(tone / N), white: r4((N - black - tone) / N), strokes: strokeCounts(k, effects) };
     const map = { id: p.id, rect: [...p.rect], ss, camera, parts: r.parts.map(q => q.name), rle: encodeMap(r.buf.id, W, H, w, h, ss) };
     const viewCam = makeCam({ ...camera, W: w, H: h });
     const bone = (actor, b) => {
@@ -218,10 +219,13 @@ export function buildPage(spec, { dir = null, cacheDir = null, onPanel = null } 
   });
 
   const byId = new Map(built.map(b => [b.p.id, b]));
+  const lettering = [];
   const letters = page.lettering.map((item, i) => {
     const b = item.panel != null ? byId.get(item.panel) : null;
     const frame = b ? { rect: b.p.rect, bone: b.bone } : { rect: [0, 0, PW, PH] };
     const out = layoutLettering(item, frame);
+    const [bx0, by0, bx1, by1] = out.bodyBox ?? out.box;
+    lettering.push({ index: i, type: item.type, kind: item.type === 'bubble' ? item.kind : null, panel: item.panel ?? null, box: [r1(bx0), r1(by0), r1(bx1 - bx0), r1(by1 - by0)] });
     return `<g id="${item.panel ?? 'page'}-l${i}">${out.svg}</g>`;
   });
   const fonts = [...new Set(page.lettering.flatMap(fontsOf))].sort();
@@ -235,7 +239,7 @@ export function buildPage(spec, { dir = null, cacheDir = null, onPanel = null } 
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(page.title)}</title>` +
     `<style>html,body{margin:0;background:#fff}svg{display:block}</style></head><body>${svg}</body></html>\n`;
-  const map = { size: [PW, PH], panels: built.map(b => b.map) };
+  const map = { size: [PW, PH], reading: page.reading, panels: built.map(b => b.map), lettering };
   const stats = { svgBytes: Buffer.byteLength(svg), panels: built.map(b => b.stats) };
 
   if (dir) {
