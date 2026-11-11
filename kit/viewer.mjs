@@ -10,22 +10,23 @@ const CORE = readFileSync(new URL('./viewer-core.mjs', import.meta.url), 'utf8')
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 const CSS = `
-:root{--ink:#16181d;--muted:#5b616e;--line:#d5d7dc;--bg:#ebecee;--panel:#fff;--accent:#1a56db;--accent-soft:rgba(26,86,219,.14);--side:372px}
+:root{--ink:#16181d;--muted:#5b616e;--line:#d5d7dc;--bg:#ebecee;--panel:#fff;--accent:#1a56db;--accent-soft:rgba(26,86,219,.14);--side:420px}
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-.bar{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:12px;padding:8px 16px;background:rgba(235,236,238,.94);border-bottom:1px solid var(--line)}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{display:flex;flex-direction:column}
+.bar{flex:none;height:48px;display:flex;align-items:center;gap:12px;padding:0 16px;background:var(--bg);border-bottom:1px solid var(--line)}
 .bar h1{margin:0;font-size:14px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 button{font:inherit;color:inherit;cursor:pointer;border:1px solid #b9bcc4;background:#fff;border-radius:6px;padding:5px 12px}
 button:hover{border-color:#8d929c}
 button:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#fff}
-.stage{padding:20px 16px 40px}
+.stage{flex:1;min-height:0;overflow:auto;padding:20px 16px 40px}
 .page{position:relative;margin:0 auto;width:min(100%,var(--pw));box-shadow:0 1px 3px rgba(0,0,0,.18)}
 .page>svg{display:block;width:100%;height:auto}
 .page>svg.ov{position:absolute;inset:0;height:100%;pointer-events:none}
 body.editing .stage{padding-right:calc(var(--side) + 32px)}
 body.editing .page{cursor:crosshair;touch-action:none;user-select:none;-webkit-user-select:none}
-.side{position:fixed;top:49px;right:16px;bottom:16px;width:var(--side);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:14px;transition:opacity .12s ease-out}
+.side{position:fixed;top:64px;right:16px;max-height:calc(100vh - 80px);width:var(--side);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:14px;transition:opacity .12s ease-out}
 .side[hidden]{display:none}
 .side.fade{opacity:0}
 .info{display:flex;flex-direction:column;gap:14px}
@@ -42,12 +43,12 @@ ol.parts .b{grid-column:1/-1;height:3px;background:#eceef1;border-radius:2px;ove
 ol.parts .b i{display:block;height:100%;background:var(--accent)}
 label{display:block;font-weight:600;margin-bottom:6px}
 textarea{width:100%;min-height:72px;resize:vertical;font:inherit;color:inherit;border:1px solid #b9bcc4;border-radius:6px;padding:7px 9px}
-pre{margin:0;padding:10px 12px;background:#f4f5f7;border:1px solid var(--line);border-radius:6px;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
+pre{margin:0;padding:10px 12px;background:#f4f5f7;border:1px solid var(--line);border-radius:6px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
 .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .row .primary{background:var(--accent);border-color:var(--accent);color:#fff}
 .row .primary:disabled{opacity:.45;cursor:default}
 .status{color:var(--muted);font-size:13px}
-@media (max-width:860px){body.editing .stage{padding-right:16px;padding-bottom:calc(46vh + 24px)}.side{top:auto;left:16px;width:auto;height:46vh}}
+@media (max-width:860px){body.editing .stage{padding-right:16px;padding-bottom:calc(46vh + 24px)}.side{top:auto;bottom:16px;left:16px;width:auto;height:46vh}}
 @media (prefers-reduced-motion:reduce){.side{transition:none}}
 `;
 
@@ -97,7 +98,14 @@ const CLIENT = `
     if (p) {
       setRect(panelEl, p.rect);
       var r = p.rect;
-      dimEl.setAttribute('d', 'M0 0H' + PW + 'V' + PH + 'H0Z' + 'M' + r[0] + ' ' + r[1] + 'v' + r[3] + 'h' + r[2] + 'v' + (-r[3]) + 'Z');
+      var box = function (q) { return 'M' + q[0] + ' ' + q[1] + 'v' + q[3] + 'h' + q[2] + 'v' + (-q[3]) + 'Z'; };
+      var d = 'M0 0H' + PW + 'V' + PH + 'H0Z' + box(r);
+      // Insets lying on the selected panel stay dimmed (even-odd fills them again).
+      map.panels.forEach(function (o) {
+        var q = o.rect;
+        if (o !== p && q[0] >= r[0] && q[1] >= r[1] && q[0] + q[2] <= r[0] + r[2] && q[1] + q[3] <= r[1] + r[3]) d += box(q);
+      });
+      dimEl.setAttribute('d', d);
       dimEl.style.display = '';
     } else { hide(panelEl); hide(dimEl); }
     if (!hit.panel) {
@@ -187,9 +195,9 @@ const CLIENT = `
       setEditing(true);
       req.value = q.get('request') || '';
       select(r);
-      var b = art.getBoundingClientRect(), k = b.height / PH;
-      var mid = b.top + window.scrollY + (r[1] + r[3] / 2) * k;
-      window.scrollTo(0, Math.max(0, mid - window.innerHeight / 2));
+      var stage = document.getElementById('stage'), b = art.getBoundingClientRect(), s0 = stage.getBoundingClientRect();
+      var mid = b.top - s0.top + stage.scrollTop + (r[1] + r[3] / 2) * (b.height / PH);
+      stage.scrollTop = Math.max(0, mid - stage.clientHeight / 2);
     }
   }
 })();
@@ -207,7 +215,7 @@ export function viewerHtml({ svg, map, pageFile = null, title = 'mangaka page' }
     `<style>${CSS.trim()}</style></head>` +
     `<body style="--pw:${PW}px">` +
     `<header class="bar"><h1>${esc(title)}</h1><button type="button" id="edit" aria-pressed="false">Edit region</button></header>` +
-    `<main class="stage"><div class="page" id="page">${svg}` +
+    `<main class="stage" id="stage"><div class="page" id="page">${svg}` +
     `<svg class="ov" id="ov" viewBox="0 0 ${PW} ${PH}" preserveAspectRatio="none" aria-hidden="true">` +
     `<path id="ov-dim" fill="rgba(20,22,28,.28)" fill-rule="evenodd" style="display:none"/>` +
     `<rect id="ov-panel" fill="none" stroke="#1a56db" stroke-width="2" stroke-dasharray="7 5" vector-effect="non-scaling-stroke" style="display:none"/>` +

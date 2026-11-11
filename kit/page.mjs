@@ -1,8 +1,9 @@
 // A page from a declarative spec: render, ink and frame every panel, letter
 // the page, and write page.svg, page.html, page.map.json and page.stats.json.
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, readFileSync, readdirSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import { resolve as resolvePath, join } from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { createHash } from 'node:crypto';
 import { renderPanel } from './shade.mjs';
 import { inkPanel } from './ink.mjs';
 import { resolveStyle } from './styles.mjs';
@@ -11,6 +12,7 @@ import { loadVRM, poseVRM } from './vrm.mjs';
 import { POSES, withHands } from './poses.mjs';
 import { makeCam, project } from './raster.mjs';
 import { layoutLettering, checkLettering, fontCss, fontsOf } from './lettering.mjs';
+import { viewerHtml } from './viewer.mjs';
 
 const { round, ceil, min } = Math;
 const f1 = v => String(round(v * 10) / 10);
@@ -163,51 +165,175 @@ const strokeCounts = (k, effects) => ({
   effects: effects.reduce((a, l) => a + (l.d.match(/M/g) || []).length, 0),
 });
 
+// ---- Panel cache ---------------------------------------------------------
+// One JSON file per panel, cacheDir/<panel id>-<key>.json, holding the panel's
+// SVG fragment, stats entry and map entry. The key is a SHA-256 over a canonical
+// JSON of everything that reaches the panel's ink, plus a fingerprint of the kit
+// source. Actor bones are cached too (cacheDir/bones/<key>.json), so a camera
+// function can be resolved without loading and posing the model.
+
+const CACHE_VERSION = 1;
+const sha256 = data => createHash('sha256').update(data).digest('hex');
+
+let kitPrint = null;
+/** SHA-256 over every kit/*.mjs file, once per process. */
+function kitFingerprint() {
+  if (kitPrint) return kitPrint;
+  const kitDir = new URL('.', import.meta.url);
+  const h = createHash('sha256');
+  for (const f of readdirSync(kitDir).filter(f => f.endsWith('.mjs')).sort()) {
+    h.update(f + '\0').update(readFileSync(new URL(f, kitDir))).update('\0');
+  }
+  return (kitPrint = h.digest('hex'));
+}
+
+class Uncacheable extends Error {}
+
+/** Plain data with sorted keys; a function stands for its `desc`, or makes the panel uncacheable. */
+function canon(v, where) {
+  if (v === null || typeof v === 'string' || typeof v === 'boolean') return v;
+  if (v === undefined) return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : String(v);
+  if (typeof v === 'function') {
+    if (v.desc && typeof v.desc === 'object') return { desc: canon(v.desc, where) };
+    throw new Uncacheable(`${where} is a function with no description`);
+  }
+  if (ArrayBuffer.isView(v)) return Array.from(v);
+  if (Array.isArray(v)) return v.map((x, i) => canon(x, `${where}[${i}]`));
+  if (typeof v === 'object') {
+    const out = {};
+    for (const k of Object.keys(v).sort()) if (v[k] !== undefined) out[k] = canon(v[k], `${where}.${k}`);
+    return out;
+  }
+  throw new Uncacheable(`${where} is not plain data`);
+}
+
+const keyOf = value => sha256(JSON.stringify(value));
+
+function readJson(file) {
+  try { return JSON.parse(readFileSync(file, 'utf8')); } catch { return null; }
+}
+
+function writeJson(file, value) {
+  const tmp = `${file}.${process.pid}.tmp`;
+  writeFileSync(tmp, JSON.stringify(value));
+  renameSync(tmp, file);
+}
+
+/** Store a panel entry and drop the panel's older entries. */
+function writeEntry(cacheDir, id, key, entry) {
+  mkdirSync(cacheDir, { recursive: true });
+  const name = `${id}-${key}.json`, stale = new RegExp(`^${id}-[0-9a-f]{64}\\.json$`);
+  for (const f of readdirSync(cacheDir)) if (f !== name && stale.test(f)) rmSync(join(cacheDir, f), { force: true });
+  writeJson(join(cacheDir, name), { key, ...entry });
+}
+
+function readEntry(cacheDir, id, key) {
+  const e = readJson(join(cacheDir, `${id}-${key}.json`));
+  return e && e.key === key && typeof e.svg === 'string' && e.stats && e.map ? e : null;
+}
+
+/**
+ * The cache key of one panel, or throws Uncacheable. `acts` are the panel's
+ * actors with resolved pose and model content hash; `camera` is resolved.
+ */
+function panelKey(p, style, camera, acts) {
+  const parts = p.scene ? p.scene.parts.map((q, i) => { const { sdf, ...rest } = q; void sdf; return canon(rest, `scene.parts[${i}]`); }) : [];
+  return keyOf({
+    v: CACHE_VERSION, kit: kitFingerprint(),
+    id: p.id, rect: p.rect, ss: p.ss, frame: p.frame, gutter: p.gutter, inset: !!p.inset,
+    style: canon(style, 'style'), regions: canon(p.regions, 'regions'), camera: canon(camera, 'camera'),
+    background: canon(p.background, 'background'), light: canon(p.light, 'light'), shade: canon(p.shade ?? null, 'shade'),
+    effects: p.effects.map((e, i) => { const { layers, ...desc } = e; void layers; return canon(desc, `effects[${i}]`); }),
+    parts, decals: canon(p.scene ? p.scene.decals : [], 'scene.decals'),
+    actors: acts.map(t => {
+      if (!t.modelHash) throw new Uncacheable(`actor "${t.a.name}": model is a loaded object, not a file`);
+      return { name: t.a.name, hair: canon(t.a.hair ?? null, 'hair'), pose: canon(t.pose, 'pose'), expr: canon(t.expr, 'expr'), root: canon(t.root, 'root'), model: t.modelHash };
+    }),
+  });
+}
+
 /**
  * Build a page. Returns { svg, html, map, stats }; when `dir` is given, model
  * paths resolve against it and the four files are written there, unless
- * `write` is false (then nothing is written).
- * onPanel({ id, ms }) is called after each panel (timing never reaches the files).
- * cacheDir is accepted for the panel cache of a later version and ignored.
+ * `write` is false (then nothing is written). page.html is the viewer; its
+ * rework instruction names `pageFile` (default page.mjs).
+ * With `cacheDir`, unchanged panels are read from the panel cache instead of
+ * being rendered; a hit gives byte-identical output.
+ * onPanel({ id, ms, cached, uncacheable }) is called after each panel (timing
+ * never reaches the files); `uncacheable` says why a panel cannot be cached.
  */
-export function buildPage(spec, { dir = null, cacheDir = null, onPanel = null, write = true } = {}) {
-  void cacheDir;
+export function buildPage(spec, { dir = null, cacheDir = null, onPanel = null, write = true, pageFile = null } = {}) {
   const page = definePage(spec);
   const [PW, PH] = page.size;
-  const models = new Map();
+  const models = new Map(), modelHashes = new Map();
   const modelOf = m => {
     if (typeof m !== 'string') return m;
     const path = resolvePath(dir ?? '.', m);
     if (!models.has(path)) models.set(path, loadVRM(path));
     return models.get(path);
   };
+  const modelHashOf = m => {
+    if (typeof m !== 'string') return null;
+    const path = resolvePath(dir ?? '.', m);
+    if (!modelHashes.has(path)) modelHashes.set(path, sha256(readFileSync(path)));
+    return modelHashes.get(path);
+  };
 
   const built = page.panels.map(p => {
     const t0 = performance.now();
     const [, , w, h] = p.rect, ss = p.ss;
-    const actors = [], bones = {};
-    for (const a of p.actors) {
-      const model = modelOf(a.model);
+    // Actors: resolved pose, posed lazily; bones come from the cache when they can.
+    const acts = p.actors.map(a => {
       let pose = typeof a.pose === 'string' ? POSES[a.pose] : (a.pose ?? {});
       if (a.hands) pose = withHands(pose, a.hands);
-      const { posed, bonePos } = poseVRM(model, { pose, expr: a.expr ?? {}, root: a.root ?? null });
-      bones[a.name] = bonePos;
-      actors.push({ name: a.name, model, posed, hair: a.hair });
+      const t = { a, pose, expr: a.expr ?? {}, root: a.root ?? null, modelHash: cacheDir ? modelHashOf(a.model) : null, done: null };
+      t.posed = () => (t.done ??= poseVRM(modelOf(a.model), { pose: t.pose, expr: t.expr, root: t.root }));
+      return t;
+    });
+    const bones = {};
+    for (const t of acts) {
+      let bonePos = null, file = null;
+      if (cacheDir && t.modelHash) {
+        try {
+          const key = keyOf({ v: CACHE_VERSION, kit: kitFingerprint(), model: t.modelHash, pose: canon(t.pose, 'pose'), expr: canon(t.expr, 'expr'), root: canon(t.root, 'root') });
+          file = join(cacheDir, 'bones', `${key}.json`);
+          bonePos = readJson(file);
+        } catch (e) { if (!(e instanceof Uncacheable)) throw e; }
+      }
+      if (!bonePos) {
+        bonePos = t.posed().bonePos;
+        if (file) { mkdirSync(join(cacheDir, 'bones'), { recursive: true }); writeJson(file, bonePos); }
+      }
+      bones[t.a.name] = bonePos;
     }
     const camera = cameraOf(p, bones);
-    const W = round(w * ss), H = round(h * ss);
-    const camSpec = { ...camera, scale: camera.scale * ss, cx: camera.cx * ss, cy: camera.cy * ss, W, H };
     const style = resolveStyle(p.style ?? page.style);
-    const r = renderPanel({ ...(p.shade || {}), scene: p.scene, actors, cam: camSpec, background: scaled(p.background ?? flat(0), ss), light: p.light });
-    const k = inkPanel(r, { style, seed: p.id, regions: p.regions, ss });
-    const effects = p.effects.flatMap(e => e.layers(w, h, { seed: p.id }));
-    const svg = panelSvg(p, k, effects);
 
-    let black = 0, tone = 0;
-    for (let i = 0; i < r.D.length; i++) { const v = r.D[i]; if (v >= style.black) black++; else if (v >= style.tone1) tone++; }
-    const N = r.D.length;
-    const stats = { id: p.id, style: style.name ?? null, balance: style.balance ?? null, black: r4(black / N), tone: r4(tone / N), white: r4((N - black - tone) / N), strokes: strokeCounts(k, effects) };
-    const map = { id: p.id, rect: [...p.rect], ss, camera, parts: r.parts.map(q => q.name), rle: encodeMap(r.buf.id, W, H, w, h, ss) };
+    let key = null, uncacheable = null, entry = null;
+    if (cacheDir) {
+      try { key = panelKey(p, style, camera, acts); } catch (e) { if (!(e instanceof Uncacheable)) throw e; uncacheable = e.message; }
+      if (key) entry = readEntry(cacheDir, p.id, key);
+    }
+    const cached = !!entry;
+    if (!entry) {
+      const actors = acts.map(t => ({ name: t.a.name, model: modelOf(t.a.model), posed: t.posed().posed, hair: t.a.hair }));
+      const W = round(w * ss), H = round(h * ss);
+      const camSpec = { ...camera, scale: camera.scale * ss, cx: camera.cx * ss, cy: camera.cy * ss, W, H };
+      const r = renderPanel({ ...(p.shade || {}), scene: p.scene, actors, cam: camSpec, background: scaled(p.background ?? flat(0), ss), light: p.light });
+      const k = inkPanel(r, { style, seed: p.id, regions: p.regions, ss });
+      const effects = p.effects.flatMap(e => e.layers(w, h, { seed: p.id }));
+      let black = 0, tone = 0;
+      for (let i = 0; i < r.D.length; i++) { const v = r.D[i]; if (v >= style.black) black++; else if (v >= style.tone1) tone++; }
+      const N = r.D.length;
+      entry = {
+        svg: panelSvg(p, k, effects),
+        stats: { id: p.id, style: style.name ?? null, balance: style.balance ?? null, black: r4(black / N), tone: r4(tone / N), white: r4((N - black - tone) / N), strokes: strokeCounts(k, effects) },
+        map: { id: p.id, rect: [...p.rect], ss, camera, parts: r.parts.map(q => q.name), rle: encodeMap(r.buf.id, W, H, w, h, ss) },
+      };
+      // Store what a hit will read back, so hits and misses give the same bytes.
+      if (key) { writeEntry(cacheDir, p.id, key, entry); entry = JSON.parse(JSON.stringify(entry)); }
+    }
     const viewCam = makeCam({ ...camera, W: w, H: h });
     const bone = (actor, b) => {
       const pos = bones[actor]?.[b];
@@ -215,8 +341,8 @@ export function buildPage(spec, { dir = null, cacheDir = null, onPanel = null, w
       const q = project(viewCam, pos);
       return [p.rect[0] + q[0], p.rect[1] + q[1]];
     };
-    if (onPanel) onPanel({ id: p.id, ms: performance.now() - t0 });
-    return { p, svg, stats, map, bone };
+    if (onPanel) onPanel({ id: p.id, ms: performance.now() - t0, cached, ...(uncacheable ? { uncacheable } : {}) });
+    return { p, svg: entry.svg, stats: entry.stats, map: entry.map, bone };
   });
 
   const byId = new Map(built.map(b => [b.p.id, b]));
@@ -237,10 +363,8 @@ export function buildPage(spec, { dir = null, cacheDir = null, onPanel = null, w
     order.map(b => b.svg).join('') +
     (letters.length ? `<g class="mk-l">${letters.join('')}</g>` : '') +
     `</svg>`;
-  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(page.title)}</title>` +
-    `<style>html,body{margin:0;background:#fff}svg{display:block}</style></head><body>${svg}</body></html>\n`;
   const map = { size: [PW, PH], reading: page.reading, panels: built.map(b => b.map), lettering };
+  const html = viewerHtml({ svg, map, pageFile, title: page.title });
   const stats = { svgBytes: Buffer.byteLength(svg), panels: built.map(b => b.stats) };
 
   if (dir && write) {
