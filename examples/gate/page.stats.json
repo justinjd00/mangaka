@@ -1,0 +1,130 @@
+{
+  "svgBytes": 712156,
+  "panels": [
+    {
+      "id": "gate",
+      "black": 0.3131,
+      "tone": 0.4569,
+      "white": 0.23,
+      "strokes": {
+        "tone1": 6,
+        "tone2": 3,
+        "blacks": 220,
+        "hatchThin": 9133,
+        "hatchMid": 3719,
+        "hatchCore": 733,
+        "mail": 16,
+        "dots": 1148,
+        "brush": 1959,
+        "knockouts": 16,
+        "lines": 20,
+        "shapes": 0,
+        "strandsWhite": 0,
+        "strandsBlack": 0,
+        "rivets": 58,
+        "holes": 26,
+        "effects": 210
+      }
+    },
+    {
+      "id": "shock",
+      "black": 0.3605,
+      "tone": 0.152,
+      "white": 0.4875,
+      "strokes": {
+        "tone1": 100,
+        "tone2": 101,
+        "blacks": 99,
+        "hatchThin": 0,
+        "hatchMid": 0,
+        "hatchCore": 0,
+        "mail": 0,
+        "dots": 0,
+        "brush": 391,
+        "knockouts": 0,
+        "lines": 0,
+        "shapes": 0,
+        "strandsWhite": 0,
+        "strandsBlack": 0,
+        "rivets": 0,
+        "holes": 0,
+        "effects": 0
+      }
+    },
+    {
+      "id": "grip",
+      "black": 0.073,
+      "tone": 0.0333,
+      "white": 0.8937,
+      "strokes": {
+        "tone1": 78,
+        "tone2": 65,
+        "blacks": 62,
+        "hatchThin": 0,
+        "hatchMid": 0,
+        "hatchCore": 0,
+        "mail": 0,
+        "dots": 0,
+        "brush": 91,
+        "knockouts": 0,
+        "lines": 0,
+        "shapes": 0,
+        "strandsWhite": 0,
+        "strandsBlack": 0,
+        "rivets": 0,
+        "holes": 0,
+        "effects": 0
+      }
+    },
+    {
+      "id": "resolve",
+      "black": 0.5645,
+      "tone": 0.2906,
+      "white": 0.1449,
+      "strokes": {
+        "tone1": 45,
+        "tone2": 28,
+        "blacks": 47,
+        "hatchThin": 0,
+        "hatchMid": 0,
+        "hatchCore": 0,
+        "mail": 0,
+        "dots": 0,
+        "brush": 539,
+        "knockouts": 0,
+        "lines": 0,
+        "shapes": 0,
+        "strandsWhite": 0,
+        "strandsBlack": 0,
+        "rivets": 0,
+        "holes": 0,
+        "effects": 0
+      }
+    },
+    {
+      "id": "helm",
+      "black": 0.3553,
+      "tone": 0.522,
+      "white": 0.1227,
+      "strokes": {
+        "tone1": 0,
+        "tone2": 0,
+        "blacks": 55,
+        "hatchThin": 2508,
+        "hatchMid": 929,
+        "hatchCore": 58,
+        "mail": 26,
+        "dots": 0,
+        "brush": 161,
+        "knockouts": 0,
+        "lines": 0,
+        "shapes": 0,
+        "strandsWhite": 0,
+        "strandsBlack": 0,
+        "rivets": 14,
+        "holes": 25,
+        "effects": 41
+      }
+    }
+  ]
+}
