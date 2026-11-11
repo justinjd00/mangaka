@@ -1,5 +1,5 @@
 {
-  "svgBytes": 441591,
+  "svgBytes": 441275,
   "panels": [
     {
       "id": "roof",
@@ -106,8 +106,8 @@
           0.45
         ]
       },
-      "black": 0.1237,
-      "tone": 0.6986,
+      "black": 0.0845,
+      "tone": 0.7378,
       "white": 0.1777,
       "strokes": {
         "tone1": 84,
