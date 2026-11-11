@@ -65,3 +65,29 @@ test('Sub, Up, Average and Paeth filters decode', () => {
 test('interlaced PNG is rejected', () => {
   assert.throws(() => decodePNG(build(1, 1, 8, 0, Buffer.from([0, 0]), [], 1)), /interlaced PNG not supported/);
 });
+
+test('decodes 1, 2 and 4 bit grey and palette images, packed from the high bit', () => {
+  // 1-bit grey, 10 px: two bytes per row, the last six bits are padding.
+  let img = decodePNG(build(10, 1, 1, 0, Buffer.from([0, 0b10110000, 0b01000000])));
+  assert.deepEqual([...img.px].filter((_, i) => i % 4 === 0), [255, 0, 255, 255, 0, 0, 0, 0, 0, 255]);
+  // 2-bit grey: 0, 1, 2, 3 -> 0, 85, 170, 255.
+  img = decodePNG(build(4, 1, 2, 0, Buffer.from([0, 0b00011011])));
+  assert.deepEqual([...img.px].filter((_, i) => i % 4 === 0), [0, 85, 170, 255]);
+  // 4-bit palette, 3 x 2, Sub filter on the second row (bpp is one byte below 8 bits):
+  // row 1 bytes 0x21, 0xff + 0x21 = 0x20 give indices 2, 1, 2.
+  const plte = Buffer.from([0, 0, 0, 10, 20, 30, 200, 100, 50]);
+  img = decodePNG(build(3, 2, 4, 3, Buffer.from([0, 0x12, 0x00, 1, 0x21, 0xff]), [['PLTE', plte], ['tRNS', Buffer.from([0])]]));
+  const rgba = i => [...img.px.subarray(i * 4, i * 4 + 4)];
+  assert.deepEqual([0, 1, 2, 3, 4, 5].map(rgba), [[10, 20, 30, 255], [200, 100, 50, 255], [0, 0, 0, 0], [200, 100, 50, 255], [10, 20, 30, 255], [200, 100, 50, 255]]);
+  // 2-bit palette.
+  img = decodePNG(build(2, 1, 2, 3, Buffer.from([0, 0b10010000]), [['PLTE', plte]]));
+  assert.deepEqual([...img.px], [200, 100, 50, 255, 10, 20, 30, 255]);
+});
+
+test('rejects a bad signature, unknown filters and impossible depths', () => {
+  const good = build(1, 1, 8, 0, Buffer.from([0, 7]));
+  const bad = Buffer.from(good); bad[1] = 0x51;
+  assert.throws(() => decodePNG(bad), /not a PNG file/);
+  assert.throws(() => decodePNG(build(1, 1, 8, 0, Buffer.from([5, 7]))), /unknown filter type 5/);
+  assert.throws(() => decodePNG(build(1, 1, 4, 2, Buffer.from([0, 7, 7]))), /PNG bit depth 4 not supported for colour type 2/);
+});
