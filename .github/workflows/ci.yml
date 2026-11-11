@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build and check the gate example
+        run: |
+          node scripts/build.mjs examples/gate/page.mjs --no-cache
+          node scripts/check.mjs examples/gate
+
+      - name: Build and check the rooftop example
+        run: |
+          node scripts/build.mjs examples/rooftop/page.mjs --no-cache
+          node scripts/check.mjs examples/rooftop
+
+      - name: Build and check the duel example
+        run: |
+          node scripts/build.mjs examples/duel/page.mjs --no-cache
+          node scripts/check.mjs examples/duel
+
+      - name: Rebuild fingerprint
+        run: node scripts/fingerprint.mjs examples/rooftop/page.mjs

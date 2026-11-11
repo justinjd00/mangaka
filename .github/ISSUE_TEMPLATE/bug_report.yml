@@ -1,0 +1,84 @@
+name: Bug report
+description: A page, the kit, a script or the install did something wrong.
+title: "Bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. For a drawing fault, a close-up helps most: `node scripts/capture.mjs <page dir> --panel <id> --zoom 4`.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where is the problem?
+      options:
+        - A page an agent made with the skill
+        - One of the examples
+        - The kit (kit/)
+        - A script (scripts/)
+        - The viewer (page.html)
+        - SKILL.md or a reference
+        - Installing the skill
+    validations:
+      required: true
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Which agent?
+      options:
+        - Claude Code
+        - Codex
+        - OpenCode
+        - Antigravity
+        - MiniMax Code
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and where on the page or in the output.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reproduce
+      description: The prompt you gave the agent, or the exact command you ran. Attach or paste the page.mjs if you can.
+      placeholder: |
+        /mangaka a quiet page on a school roof at dusk
+        node scripts/build.mjs examples/rooftop/page.mjs --no-cache
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: Any error, check.mjs or diff.mjs output.
+      render: shell
+  - type: input
+    id: model
+    attributes:
+      label: Character model
+      description: Which VRM model, if any. Do not attach models you are not allowed to share.
+      placeholder: bundled shino.vrm / my own VRoid export (VRM 0.x)
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Node.js version, operating system, Chrome version, agent version.
+      placeholder: node --version, your OS, your Chrome version, claude --version
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Drag images here. Close-ups for drawing faults.

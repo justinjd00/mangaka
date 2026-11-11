@@ -1,0 +1,50 @@
+name: Page or feature request
+description: Ask for a new example page, a new part in the parts library, a new style or check, or a change to how the skill works.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        mangaka makes black-and-white manga pages from 3D scenes and VRM characters. Colour, manhwa scroll format and motion pages are not in this version. Original characters only: requests to reproduce a named character or an existing page will be closed.
+  - type: dropdown
+    id: request
+    attributes:
+      label: What are you asking for?
+      options:
+        - A new example page
+        - A new part in the parts library (kit/parts/)
+        - A new pose or hand shape
+        - A new ink style or effect
+        - A new check or script
+        - A change to the skill's instructions
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: For a page, the beat and the panels you have in mind. For anything else, describe the change.
+      placeholder: A rainy street at night, a girl under a shop awning, a stranger offers an umbrella. Five panels.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it is worth adding
+      description: What it would let people make that they cannot make now.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you submit
+      options:
+        - label: I searched the existing issues.
+          required: true
+        - label: I read the Limits section of the README.
+          required: true
