@@ -1,0 +1,165 @@
+{
+  "svgBytes": 450933,
+  "panels": [
+    {
+      "id": "roof",
+      "style": "tone-soft",
+      "balance": {
+        "black": [
+          0.03,
+          0.45
+        ]
+      },
+      "black": 0.1551,
+      "tone": 0.7671,
+      "white": 0.0778,
+      "strokes": {
+        "tone1": 161,
+        "tone2": 146,
+        "blacks": 132,
+        "hatchThin": 154,
+        "hatchMid": 25,
+        "hatchCore": 5,
+        "mail": 0,
+        "dots": 935,
+        "brush": 1564,
+        "knockouts": 0,
+        "lines": 0,
+        "shapes": 82,
+        "strandsWhite": 0,
+        "strandsBlack": 0,
+        "rivets": 0,
+        "holes": 0,
+        "effects": 0
+      }
+    },
+    {
+      "id": "her",
+      "style": "tone-soft",
+      "balance": {
+        "black": [
+          0.03,
+          0.45
+        ]
+      },
+      "black": 0.1365,
+      "tone": 0.6918,
+      "white": 0.1717,
+      "strokes": {
+        "tone1": 50,
+        "tone2": 56,
+        "blacks": 87,
+        "hatchThin": 12,
+        "hatchMid": 0,
+        "hatchCore": 0,
+        "mail": 0,
+        "dots": 0,
+        "brush": 695,
+        "knockouts": 0,
+        "lines": 0,
+        "shapes": 0,
+        "strandsWhite": 0,
+        "strandsBlack": 0,
+        "rivets": 0,
+        "holes": 0,
+        "effects": 0
+      }
+    },
+    {
+      "id": "him",
+      "style": "tone-soft",
+      "balance": {
+        "black": [
+          0.03,
+          0.45
+        ]
+      },
+      "black": 0.0833,
+      "tone": 0.6859,
+      "white": 0.2307,
+      "strokes": {
+        "tone1": 41,
+        "tone2": 48,
+        "blacks": 38,
+        "hatchThin": 0,
+        "hatchMid": 0,
+        "hatchCore": 0,
+        "mail": 0,
+        "dots": 0,
+        "brush": 399,
+        "knockouts": 0,
+        "lines": 0,
+        "shapes": 0,
+        "strandsWhite": 0,
+        "strandsBlack": 0,
+        "rivets": 0,
+        "holes": 0,
+        "effects": 0
+      }
+    },
+    {
+      "id": "over",
+      "style": "tone-soft",
+      "balance": {
+        "black": [
+          0.03,
+          0.45
+        ]
+      },
+      "black": 0.1237,
+      "tone": 0.6986,
+      "white": 0.1777,
+      "strokes": {
+        "tone1": 84,
+        "tone2": 89,
+        "blacks": 227,
+        "hatchThin": 22,
+        "hatchMid": 1,
+        "hatchCore": 0,
+        "mail": 0,
+        "dots": 0,
+        "brush": 1000,
+        "knockouts": 0,
+        "lines": 0,
+        "shapes": 0,
+        "strandsWhite": 0,
+        "strandsBlack": 0,
+        "rivets": 0,
+        "holes": 0,
+        "effects": 0
+      }
+    },
+    {
+      "id": "close",
+      "style": "tone-soft",
+      "balance": {
+        "black": [
+          0.03,
+          0.45
+        ]
+      },
+      "black": 0.4223,
+      "tone": 0.3926,
+      "white": 0.1851,
+      "strokes": {
+        "tone1": 72,
+        "tone2": 76,
+        "blacks": 47,
+        "hatchThin": 0,
+        "hatchMid": 0,
+        "hatchCore": 0,
+        "mail": 0,
+        "dots": 0,
+        "brush": 450,
+        "knockouts": 0,
+        "lines": 0,
+        "shapes": 0,
+        "strandsWhite": 0,
+        "strandsBlack": 0,
+        "rivets": 0,
+        "holes": 0,
+        "effects": 0
+      }
+    }
+  ]
+}
