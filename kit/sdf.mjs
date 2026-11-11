@@ -131,7 +131,8 @@ export const disp = (f, g, amp, st = 0.6, tag) => {
 };
 export const raw = (f, b, st = 0.6, tag) => {
   needTag('raw', tag);
-  return mk(f, b, st, { op: 'raw', b, st, tag, args: [] });
+  // wrap so every form is a fresh function; mk mutates what it is given
+  return mk((x, y, z) => f(x, y, z), b, st, { op: 'raw', b, st, tag, args: [] });
 };
 
 export const rotX = a => [1, 0, 0, 0, cos(a), -sin(a), 0, sin(a), cos(a)];

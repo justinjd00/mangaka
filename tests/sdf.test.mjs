@@ -115,3 +115,16 @@ test('part and scene collect parts and decals', () => {
   assert.ok(sc.decals[3].pts[0]);
   assert.equal(sc.decals[5].thr, 0.4);
 });
+
+test('raw wraps the closure so forms built from one function stay independent', () => {
+  const a = S.raw(raw0, [0, 0, 0, 0.2], 0.6, 'a');
+  const b = S.raw(raw0, [1, 1, 1, 0.5], 0.4, 'b');
+  assert.notEqual(a, b);
+  assert.deepEqual(a.b, [0, 0, 0, 0.2]);
+  assert.equal(a.st, 0.6);
+  assert.equal(a.desc.tag, 'a');
+  assert.deepEqual(b.b, [1, 1, 1, 0.5]);
+  assert.equal(b.desc.tag, 'b');
+  assert.notEqual(S.hashForm(a), S.hashForm(b));
+  assert.equal(a(0, 0, 0), raw0(0, 0, 0));
+});

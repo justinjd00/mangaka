@@ -5,5 +5,5 @@
   "type": "module",
   "license": "MIT",
   "engines": { "node": ">=20.10" },
-  "scripts": { "test": "node --test tests/" }
+  "scripts": { "test": "node --test" }
 }
