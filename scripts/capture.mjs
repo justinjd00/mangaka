@@ -6,9 +6,10 @@
 // <dir> holds page.svg and page.map.json. Exit 2 on bad arguments, 1 when Chrome fails.
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { decodeMap } from '../kit/page.mjs';
 import { screenshot, findChrome } from './chrome.mjs';
+import { isMain } from './main.mjs';
 
 const USAGE = 'usage: node scripts/capture.mjs <dir> [--panel id] [--part name] [--zoom 2|4] [--grid n] [--out shots/]';
 const MARGIN = 6;
@@ -99,4 +100,4 @@ function main() {
     console.log(`wrote ${png} (${crop[2] * scale} x ${crop[3] * scale})`);
   }
 }
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+if (isMain(import.meta.url)) main();

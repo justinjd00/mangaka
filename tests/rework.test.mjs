@@ -3,14 +3,15 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as S from '../kit/sdf.mjs';
 import { buildPage } from '../kit/page.mjs';
 import { gradient, flat } from '../kit/backgrounds.mjs';
 import { rain } from '../kit/effects.mjs';
 import { caption, bubble } from '../kit/lettering.mjs';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 const ballScene = (r = 0.35) => {
   const sc = S.scene();
@@ -151,8 +152,8 @@ test('diff passes a region override and fails when a second, far region also cha
 test('rework.mjs and diff.mjs: rebuild one panel, then prove the change stayed in its region', () => {
   const dir = mkdtempSync(join(tmpdir(), 'mangaka-rework-'));
   const file = join(dir, 'page.mjs');
-  const src = regions => `import * as S from ${JSON.stringify(join(ROOT, 'kit/sdf.mjs'))};\n` +
-    `import { gradient } from ${JSON.stringify(join(ROOT, 'kit/backgrounds.mjs'))};\n` +
+  const src = regions => `import * as S from ${JSON.stringify(pathToFileURL(join(ROOT, 'kit/sdf.mjs')).href)};\n` +
+    `import { gradient } from ${JSON.stringify(pathToFileURL(join(ROOT, 'kit/backgrounds.mjs')).href)};\n` +
     `const ball = () => { const sc = S.scene(); sc.add('ground', 'ground', S.box([0, -0.05, 0], [1.2, 0.05, 1.2])); sc.add('ball', 'metal', S.sphere([0, 0.4, 0], 0.35)); return sc; };\n` +
     `export default { size: [240, 120], panels: [\n` +
     `  { id: 'a', rect: [4, 4, 110, 112], scene: ball(), camera: { yaw: 0.2, pitch: 0.3, scale: 90, target: [0, 0.3, 0] }, background: gradient(0.3, 0.7), regions: ${JSON.stringify(regions.a)} },\n` +
@@ -229,6 +230,49 @@ test('rework.mjs warns about panels it cannot cache instead of counting them', (
     assert.match(rw.stdout, /panel a +rebuilt/);
     assert.match(rw.stderr, /^warning: panel b is not cacheable and was rebuilt \(background is a function with no description\)$/m);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('rework.mjs on a cold cache builds every panel without failing; a changed key still counts', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'mangaka-rework-cold-'));
+  const file = join(dir, 'page.mjs');
+  const src = (a, b) => `export default { size: [100, 50], panels: [\n` +
+    `  { id: 'a', rect: [0, 0, 48, 50], camera: { scale: 1 }, regions: [{ rect: [5, 5, 10, 10], set: { black: ${a} } }] },\n` +
+    `  { id: 'b', rect: [52, 0, 48, 50], camera: { scale: 1 }, regions: [{ rect: [5, 5, 10, 10], set: { black: ${b} } }] },\n] };\n`;
+  const node = (...args) => spawnSync(process.execPath, args, { cwd: dir, encoding: 'utf8' });
+  try {
+    // No cache at all: both panels are built, nothing counts against --panel a.
+    writeFileSync(file, src(0.8, 0.8));
+    const cold = node(join(ROOT, 'scripts/rework.mjs'), 'page.mjs', '--panel', 'a');
+    assert.equal(cold.status, 0, cold.stdout + cold.stderr);
+    assert.match(cold.stdout, /^panel a +built \(no cache yet\)$/m);
+    assert.match(cold.stdout, /^panel b +built \(no cache yet\)$/m);
+    assert.match(cold.stdout, /no cache entry yet for b/);
+    // An entry for b exists under another key: that is a stray rebuild.
+    writeFileSync(file, src(0.5, 0.6));
+    const warm = node(join(ROOT, 'scripts/rework.mjs'), 'page.mjs', '--panel', 'a');
+    assert.equal(warm.status, 1);
+    assert.match(warm.stdout, /^panel a +rebuilt$/m);
+    assert.match(warm.stdout, /^panel b +rebuilt$/m);
+    assert.match(warm.stderr, /rebuilt more than panel "a": b also changed/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('page.html names the page file relative to the skill root, else to the current directory', async () => {
+  const { pageLabel } = await import('../scripts/main.mjs');
+  const { mkdirSync } = await import('node:fs');
+  const root = mkdtempSync(join(tmpdir(), 'mangaka-label-'));
+  try {
+    mkdirSync(join(root, 'skill', 'examples', 'x'), { recursive: true });
+    writeFileSync(join(root, 'skill', 'SKILL.md'), '---\nname: t\n---\n');
+    assert.equal(pageLabel(join(root, 'skill', 'examples', 'x', 'page.mjs')), 'examples/x/page.mjs');
+    mkdirSync(join(root, 'loose'));
+    assert.equal(pageLabel(join(root, 'loose', 'page.mjs')), relative(process.cwd(), join(root, 'loose', 'page.mjs')).split(sep).join('/'));
+    // Through build.mjs, from a directory unrelated to the page.
+    writeFileSync(join(root, 'skill', 'examples', 'x', 'page.mjs'), "export default { size: [60, 40], panels: [{ id: 'a', rect: [0, 0, 60, 40], camera: { scale: 1 } }] };\n");
+    const r = spawnSync(process.execPath, [join(ROOT, 'scripts/build.mjs'), join(root, 'skill', 'examples', 'x', 'page.mjs'), '--no-cache'], { cwd: join(root, 'loose'), encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(readFileSync(join(root, 'skill', 'examples', 'x', 'page.html'), 'utf8'), /"pageFile":"examples\/x\/page\.mjs"/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test('the kit fingerprint covers subdirectories such as kit/parts', async () => {

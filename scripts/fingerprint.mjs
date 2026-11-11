@@ -2,8 +2,9 @@
 // Build a page twice without cache and compare SHA-256 of the SVG: node scripts/fingerprint.mjs <page.mjs>
 // Exit 0 when identical, 1 when they differ, 2 on bad arguments.
 import { resolve, dirname } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { isMain } from './main.mjs';
 
 
 /** Build `pageFile` twice in separate processes (no cache, `write: false`, so build output is never touched) and compare. */
@@ -21,7 +22,7 @@ export function fingerprint(pageFile) {
   return { a, b, same: a === b };
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMain(import.meta.url)) {
   const file = process.argv[2];
   if (!file || process.argv.length > 3 || file.startsWith('--')) { console.error('usage: node scripts/fingerprint.mjs <page.mjs>'); process.exit(2); }
   const fp = fingerprint(file);

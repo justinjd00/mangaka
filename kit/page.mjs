@@ -271,6 +271,12 @@ function writeEntry(cacheDir, id, key, entry) {
   writeJson(join(cacheDir, name), { key, ...entry });
 }
 
+/** True when the cache holds an entry for panel `id` under any key. */
+function hasEntry(cacheDir, id) {
+  const any = new RegExp(`^${id}-[0-9a-f]{64}\\.json$`);
+  try { return readdirSync(cacheDir).some(f => any.test(f)); } catch { return false; }
+}
+
 function readEntry(cacheDir, id, key) {
   const e = readJson(join(cacheDir, `${id}-${key}.json`));
   return e && e.key === key && typeof e.svg === 'string' && e.stats && e.map ? e : null;
@@ -303,8 +309,9 @@ function panelKey(p, scene, style, camera, acts) {
  * rework instruction names `pageFile` (default page.mjs).
  * With `cacheDir`, unchanged panels are read from the panel cache instead of
  * being rendered; a hit gives byte-identical output.
- * onPanel({ id, ms, cached, uncacheable }) is called after each panel (timing
- * never reaches the files); `uncacheable` says why a panel cannot be cached.
+ * onPanel({ id, ms, cached, cold, uncacheable }) is called after each panel (timing
+ * never reaches the files); `cold` is true on a miss when the cache held no entry
+ * for that panel id at all; `uncacheable` says why a panel cannot be cached.
  */
 export function buildPage(spec, { dir = null, cacheDir = null, onPanel = null, write = true, pageFile = null } = {}) {
   const page = definePage(spec);
@@ -357,10 +364,10 @@ export function buildPage(spec, { dir = null, cacheDir = null, onPanel = null, w
     const scene = sceneOf(p, acts, frames, modelOf);
     const style = resolveStyle(p.style ?? page.style);
 
-    let key = null, uncacheable = null, entry = null;
+    let key = null, uncacheable = null, entry = null, cold = false;
     if (cacheDir) {
       try { key = panelKey(p, scene, style, camera, acts); } catch (e) { if (!(e instanceof Uncacheable)) throw e; uncacheable = e.message; }
-      if (key) entry = readEntry(cacheDir, p.id, key);
+      if (key) { entry = readEntry(cacheDir, p.id, key); cold = !entry && !hasEntry(cacheDir, p.id); }
     }
     const cached = !!entry;
     if (!entry) {
@@ -388,7 +395,7 @@ export function buildPage(spec, { dir = null, cacheDir = null, onPanel = null, w
       const q = project(viewCam, pos);
       return [p.rect[0] + q[0], p.rect[1] + q[1]];
     };
-    if (onPanel) onPanel({ id: p.id, ms: performance.now() - t0, cached, ...(uncacheable ? { uncacheable } : {}) });
+    if (onPanel) onPanel({ id: p.id, ms: performance.now() - t0, cached, ...(cold ? { cold } : {}), ...(uncacheable ? { uncacheable } : {}) });
     return { p, svg: entry.svg, stats: entry.stats, map: entry.map, bone };
   });
 

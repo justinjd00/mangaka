@@ -3,8 +3,8 @@
 // Exit 0 when clean, 1 with a list of problems, 2 on bad arguments.
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { fingerprint } from './fingerprint.mjs';
+import { isMain } from './main.mjs';
 
 const MAX_SVG = 2 * 1024 * 1024;
 const GRAB = 12;
@@ -84,4 +84,4 @@ function main() {
   }
   console.log(`ok: ${stats.panels.length} panels, ${(map.lettering ?? []).length} lettering items, ${svgBytes} bytes`);
 }
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+if (isMain(import.meta.url)) main();

@@ -11,10 +11,10 @@
 // shadow and occlusion reach). Prints a summary per layer and writes nothing.
 // Exit 0 when every change is allowed, 1 when something changed outside, 2 on
 // bad arguments or missing files.
-import { readFileSync, realpathSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { partBox } from './capture.mjs';
+import { isMain } from './main.mjs';
 
 const TOKEN = /[MmLlHhVvCcSsQqTtAaZz]|-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/g;
 const ARGS = { M: 2, L: 2, H: 1, V: 1, C: 6, S: 4, Q: 4, T: 2, A: 7 };
@@ -312,4 +312,4 @@ function main() {
   }
   console.log(`ok: every change lies inside ${area} (page px)`);
 }
-if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) main();
+if (isMain(import.meta.url)) main();

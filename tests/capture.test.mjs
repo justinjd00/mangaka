@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, readdirSync, statSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { buildPage } from '../kit/page.mjs';
 import { findChrome } from '../scripts/chrome.mjs';
 import { caption, bubble } from '../kit/lettering.mjs';
@@ -11,7 +12,7 @@ import * as S from '../kit/sdf.mjs';
 
 const chrome = findChrome();
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-const run = (script, ...args) => spawnSync(process.execPath, [new URL(`../scripts/${script}`, import.meta.url).pathname, ...args], { encoding: 'utf8' });
+const run = (script, ...args) => spawnSync(process.execPath, [fileURLToPath(new URL(`../scripts/${script}`, import.meta.url)), ...args], { encoding: 'utf8' });
 
 test('scripts print usage and exit 2 on bad arguments', () => {
   for (const s of ['capture.mjs', 'sheet.mjs', 'check.mjs', 'fingerprint.mjs']) {
@@ -20,6 +21,19 @@ test('scripts print usage and exit 2 on bad arguments', () => {
     assert.match(r.stderr, /^usage: node scripts\//, s);
   }
   assert.equal(run('capture.mjs', '.', '--zoom', '3').status, 2);
+});
+
+test('scripts run through a symlinked skill folder', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'mangaka-link-'));
+  try {
+    const link = join(dir, 'mangaka');
+    symlinkSync(fileURLToPath(new URL('..', import.meta.url)), link, 'dir');
+    for (const s of ['check.mjs', 'capture.mjs', 'sheet.mjs', 'fingerprint.mjs', 'diff.mjs', 'build.mjs', 'rework.mjs']) {
+      const r = spawnSync(process.execPath, [join(link, 'scripts', s)], { encoding: 'utf8' });
+      assert.equal(r.status, 2, `${s}: ${r.stdout}${r.stderr}`);
+      assert.match(r.stderr, /^usage: node scripts\//, s);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('capture and sheet write PNGs, check passes without a fingerprint', { skip: !chrome && 'Chrome not found' }, () => {
@@ -61,7 +75,7 @@ test('fingerprint compares two builds of a page file', async () => {
     assert.deepEqual(readdirSync(dir), ['page.mjs'], 'fingerprint writes no build output');
     const snap = () => readdirSync(dir).map(f => [f, statSync(join(dir, f)).mtimeMs]);
     const before = snap();
-    const spec = (await import(join(dir, 'page.mjs'))).default;
+    const spec = (await import(pathToFileURL(join(dir, 'page.mjs')).href)).default;
     const out = buildPage(spec, { dir, write: false });
     assert.ok(out.svg.length > 0);
     assert.deepEqual(snap(), before, 'buildPage with write: false writes nothing');

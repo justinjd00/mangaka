@@ -5,8 +5,9 @@
 // Exit 2 on bad arguments, 1 when Chrome fails.
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { screenshot, findChrome } from './chrome.mjs';
+import { isMain } from './main.mjs';
 
 const USAGE = 'usage: node scripts/sheet.mjs <dir> [--out shots/sheet.png]';
 const REGION = [120, 100];   // page px shown per close-up, shown at 3x
@@ -120,4 +121,4 @@ function main() {
   finally { rmSync(html, { force: true }); }
   console.log(`wrote ${out} (${w} x ${h}); close-ups: ${cells.map(c => `${c.panel}[${c.col},${c.row}]`).join(' ')}`);
 }
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+if (isMain(import.meta.url)) main();
