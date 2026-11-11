@@ -15,30 +15,36 @@ const model = '../../models/fumiriya.vrm';
 // Height of the gate's earth mound at (x, z), so the boy stands on it.
 const groundAt = (x, z) => -0.62 + 0.62 * Math.sqrt(Math.max(0, 1 - (x / 3.2) ** 2 - ((z - 0.15) / 2.4) ** 2));
 
-// The sword sits across the curled fingers of the right hand; its blade leaves the thumb side (see kit/attach.mjs).
-const GRIP = { at: [0.08, -0.012, 0], R: S.rotX(-Math.PI / 2) };
+// A one-handed sword sized to the boy (arm, shoulder to fingertip, about 0.63 m;
+// blade 0.5 m). Its grip sits inside the fist closed with HANDS.hilt, blade
+// leaving the thumb side (see kit/attach.mjs).
+const BLADE = { blade: 0.5, grip: 0.13, gripR: 0.0115, guard: 0.07, width: 0.02 };
+const GRIP = { at: [0.065, -0.032, 0], R: S.rotX(-Math.PI / 2), ...BLADE };
 const withSword = sc => ({ actors }) => {
   const out = sc ? sc() : S.scene();
-  attachTo(out, boneFrame(actors.boy.model, actors.boy.result, 'rightHand'), local => sword(local, 'boy.sword', GRIP));
+  attachTo(out, boneFrame(null, actors.boy.result, 'rightHand'), local => sword(local, 'boy.sword', GRIP));
   return out;
 };
 
-// Arm poses found by fitting the hand and blade direction.
-const ready = { rightUpperArm: [0.15, 0.46, -1.45], rightLowerArm: [0, 0.17, 0], rightHand: [-0.13, 0.03, 0.28] };
-const strike = { rightUpperArm: [-0.67, 0.98, -1.5], rightLowerArm: [0, 0.07, 0], rightHand: [0.59, -0.66, -0.57] };
-const { rightUpperArm, rightLowerArm, ...runBody } = POSES.run;
-void rightUpperArm; void rightLowerArm;
-const charge = withHands({ ...runBody, ...ready, head: [0.05, 0, 0] }, { left: 'fist', right: 'grip' });
+// Arm poses found by fitting the hand position and blade direction (bones-only poses).
+const ready = { rightUpperArm: [0.38, 0.24, -1.47], rightLowerArm: [0, 0.07, 0], rightHand: [-0.12, -0.38, -0.5] };
+const strike = { rightUpperArm: [-0.57, 0.8, -1.45], rightLowerArm: [0, 0.22, 0], rightHand: [0.62, -0.48, -0.48] };
+const R = POSES.run;
+const runBody = {
+  leftUpperLeg: R.leftUpperLeg, leftLowerLeg: R.leftLowerLeg, rightUpperLeg: R.rightUpperLeg, rightLowerLeg: R.rightLowerLeg,
+  leftUpperArm: R.leftUpperArm, leftLowerArm: R.leftLowerArm, spine: R.spine,
+};
+const charge = withHands({ ...runBody, ...ready, head: [0.05, 0, 0] }, { left: 'fist', right: 'hilt' });
 const hit = withHands({ ...POSES.stand, ...strike, leftUpperArm: [0.3, -0.4, 1.0], leftLowerArm: [0, -0.9, 0], head: [0.1, 0.1, 0],
-  leftUpperLeg: [0.45, 0, -0.1], leftLowerLeg: [-0.5, 0, 0], rightUpperLeg: [-0.35, 0, 0.12], rightLowerLeg: [-0.15, 0, 0] }, { left: 'fist', right: 'grip' });
+  leftUpperLeg: [0.45, 0, -0.1], leftLowerLeg: [-0.5, 0, 0], rightUpperLeg: [-0.35, 0, 0.12], rightLowerLeg: [-0.15, 0, 0] }, { left: 'fist', right: 'hilt' });
 
-// The strike lands on the shield's upper rim: the boy stands 1.215 m out along the shield's facing.
+// The blade tip meets the shield plate (fitted to about 5 mm clearance): the boy stands 0.94 m out along the shield's facing.
 const n = [Math.sin(0.5), 0, Math.cos(0.5)];
-const hitPos = [0.45 + n[0] * 1.215, 0, 0.25 + n[2] * 1.215];
+const hitPos = [0.45 + n[0] * 0.94, 0, 0.25 + n[2] * 0.94];
 hitPos[1] = groundAt(hitPos[0], hitPos[2]);
 const hitRoot = { pos: hitPos, yaw: Math.atan2(-n[0], -n[2]) };
 const runRoot = { pos: [1.9, 0, 2.3], yaw: Math.atan2(-1.9, -2.15) };
-const clashAt = [0.32, 1.29, 0.32];
+const clashAt = [0.44, 1.35, 0.27];
 
 const lightFor = (yaw, side = -0.45, upk = 0.55) => {
   const v = [Math.sin(yaw) + Math.cos(yaw) * side, upk, Math.cos(yaw) - Math.sin(yaw) * side], l = Math.hypot(...v);
@@ -51,9 +57,9 @@ export default definePage({
     { id: 'charge', rect: [392, 16, 492, 450], clip: [[512, 16], [884, 16], [884, 466], [392, 466]], ss: 1.4,
       scene: withSword(null),
       actors: [{ name: 'boy', model, pose: charge, root: runRoot, expr: { angry: 0.8, a: 0.3 } }],
-      camera: ({ bones }) => ({ yaw: runRoot.yaw + 1.25, pitch: 0.06, scale: 250, cx: 290, cy: 250, target: [bones.boy.hips[0], 1.0, bones.boy.hips[2]] }),
+      camera: ({ bones }) => ({ yaw: runRoot.yaw + 1.05, pitch: 0.06, scale: 250, cx: 300, cy: 250, target: [bones.boy.hips[0], 1.0, bones.boy.hips[2]] }),
       background: speedLines({ angle: 0.08, density: 0.6, pitch: 8, seed: 'charge' }),
-      light: { dir: lightFor(runRoot.yaw + 1.25, -0.6), target: [1.9, 1, 2.3], scale: 300 } },
+      light: { dir: lightFor(runRoot.yaw + 1.05, -0.6), target: [1.9, 1, 2.3], scale: 300 } },
     { id: 'knight', rect: [16, 16, 484, 450], clip: [[16, 16], [500, 16], [380, 466], [16, 466]], ss: 1.3,
       scene: buildKnight(),
       camera: { yaw: 0.35, pitch: -0.18, scale: 190, cx: 215, cy: 235, target: [0.05, 1.12, 0] },
@@ -77,7 +83,7 @@ export default definePage({
   ],
   lettering: [
     sfx({ panel: 'charge', text: 'Dash!', at: [0.12, 0.93], rotate: -8, size: 50 }),
-    sfx({ panel: 'clash', text: 'Klang!!', at: [0.56, 0.3], rotate: -12, size: 64 }),
+    sfx({ panel: 'clash', text: 'Klang!!', at: [0.6, 0.155], rotate: -10, size: 58 }),
     bubble({ panel: 'shout', kind: 'shout', text: "I said I'm NOT running!", at: [0.3, 0.2], tail: { actor: 'boy', bone: 'head' } }),
     sfx({ panel: 'helm', text: 'Grrk...', at: [0.08, 0.92], rotate: -6, size: 40 }),
   ],
