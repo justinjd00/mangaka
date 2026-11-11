@@ -149,12 +149,18 @@ export const mapply = (R, v) => [
   R[3] * v[0] + R[4] * v[1] + R[5] * v[2],
   R[6] * v[0] + R[7] * v[1] + R[8] * v[2]];
 
-export const xform = (f, o, R) => {
+/**
+ * Rotate f by R about the point o, then move o to `to` (default: o stays put).
+ * A point p of the result samples f at o + R^T (p - to).
+ */
+export const xform = (f, o, R, to = o) => {
   const c = mapply(R, [f.b[0] - o[0], f.b[1] - o[1], f.b[2] - o[2]]);
+  const desc = { op: 'xform', o, R, args: [f.desc] };
+  if (to !== o) desc.to = to;
   return mk((x, y, z) => {
-    const px = x - o[0], py = y - o[1], pz = z - o[2];
+    const px = x - to[0], py = y - to[1], pz = z - to[2];
     return f(o[0] + R[0] * px + R[3] * py + R[6] * pz, o[1] + R[1] * px + R[4] * py + R[7] * pz, o[2] + R[2] * px + R[5] * py + R[8] * pz);
-  }, [o[0] + c[0], o[1] + c[1], o[2] + c[2], f.b[3]], f.st, { op: 'xform', o, R, args: [f.desc] });
+  }, [to[0] + c[0], to[1] + c[1], to[2] + c[2], f.b[3]], f.st, desc);
 };
 
 export const squash = (f, o, s) => {

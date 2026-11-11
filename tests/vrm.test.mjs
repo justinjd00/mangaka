@@ -76,3 +76,21 @@ test('plain glTF files are rejected', () => {
   const f = crafted({ asset: { version: '2.0' } });
   assert.throws(() => loadVRM(f), { message: 'not a VRM file' });
 });
+
+test('poseVRM gives a world rotation per bone that carries the root yaw', () => {
+  const a = poseVRM(model, { pose: POSES.stand });
+  const b = poseVRM(model, { pose: POSES.stand, root: { pos: [1, 0, 2], yaw: 0.5 } });
+  assert.deepEqual(Object.keys(a.boneRot).sort(), Object.keys(a.bonePos).sort());
+  const c = Math.cos(0.5), s = Math.sin(0.5);
+  for (const bone of ['hips', 'rightHand', 'head']) {
+    const R = a.boneRot[bone], Q = b.boneRot[bone];
+    // Q = rotY(0.5) R, column by column.
+    for (let col = 0; col < 3; col++) {
+      const x = R[col], y = R[3 + col], z = R[6 + col];
+      assert.ok(Math.abs(Q[col] - (c * x + s * z)) < 1e-9 && Math.abs(Q[3 + col] - y) < 1e-9 && Math.abs(Q[6 + col] - (-s * x + c * z)) < 1e-9, bone);
+    }
+  }
+  // Rest pose after the flip: X and Z turned around.
+  const rest = poseVRM(model).boneRot.hips.map(v => Math.round(v * 1e6) / 1e6 + 0);
+  assert.deepEqual(rest, [-1, 0, 0, 0, 1, 0, 0, 0, -1]);
+});

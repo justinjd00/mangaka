@@ -128,3 +128,13 @@ test('raw wraps the closure so forms built from one function stay independent', 
   assert.notEqual(S.hashForm(a), S.hashForm(b));
   assert.equal(a(0, 0, 0), raw0(0, 0, 0));
 });
+
+test('xform can move the pivot: `to` translates, and leaving it out keeps the old description', () => {
+  const f = S.sphere([0, 0.5, 0], 0.1), R = S.rotZ(Math.PI / 2);
+  assert.deepEqual(Object.keys(S.xform(f, [0, 0, 0], R).desc), ['op', 'o', 'R', 'args']);
+  const g = S.xform(f, [0, 0, 0], R, [1, 2, 3]);
+  // Local +Y goes to world -X under rotZ(90 degrees), then the origin moves to [1, 2, 3].
+  assert.ok(Math.abs(g(0.5, 2, 3) + 0.1) < 1e-9);
+  assert.ok(Math.abs(g.b[0] - 0.5) < 1e-9 && Math.abs(g.b[1] - 2) < 1e-9 && g.b[3] === 0.1);
+  assert.deepEqual(g.desc.to, [1, 2, 3]);
+});

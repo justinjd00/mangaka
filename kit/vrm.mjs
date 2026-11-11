@@ -200,14 +200,26 @@ export function poseVRM(model, { pose = {}, expr = {}, root = null, flip = true 
     posed.push({ prim: p, wp, wn });
   }
 
-  const bonePos = {};
+  const bonePos = {}, boneRot = {};
   for (const [bn, ni] of Object.entries(bones)) {
     const m = world[ni];
     let X = flip ? -m[12] : m[12], Y = m[13], Z = flip ? -m[14] : m[14];
     if (root) { const x1 = X * rc + Z * rs, z1 = -X * rs + Z * rc; X = x1 + root.pos[0]; Y += root.pos[1]; Z = z1 + root.pos[2]; }
     bonePos[bn] = [X, Y, Z];
+    // Row-major 3x3 world rotation (columns are the bone's local axes), with the
+    // same flip and root yaw as bonePos.
+    const R = new Array(9);
+    for (let c = 0; c < 3; c++) {
+      let a = m[c * 4], b2 = m[c * 4 + 1], d = m[c * 4 + 2];
+      const l = hypot(a, b2, d) || 1;
+      a /= l; b2 /= l; d /= l;
+      if (flip) { a = -a; d = -d; }
+      if (root) { const a1 = a * rc + d * rs, d1 = -a * rs + d * rc; a = a1; d = d1; }
+      R[c] = a; R[3 + c] = b2; R[6 + c] = d;
+    }
+    boneRot[bn] = R;
   }
-  return { posed, bonePos };
+  return { posed, bonePos, boneRot };
 }
 
 /**
