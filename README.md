@@ -95,13 +95,13 @@ mangaka is a standard [Agent Skill](https://agentskills.io): a folder with a `SK
 | **skills CLI**, for you (Claude Code) | `npx skills add justinjd00/mangaka -g -a claude-code` | `~/.claude/skills/mangaka` |
 | **skills CLI**, for you (Codex) | `npx skills add justinjd00/mangaka -g -a codex` | `~/.agents/skills/mangaka` |
 | **skills CLI**, for you (OpenCode) | `npx skills add justinjd00/mangaka -g -a opencode` | `~/.config/opencode/skills/mangaka` |
-| **skills CLI**, for you (Antigravity) | `npx skills add justinjd00/mangaka -g -a antigravity` | `~/.gemini/antigravity/skills/mangaka` |
+| **skills CLI**, for you (Antigravity) | `npx skills add justinjd00/mangaka -g -a antigravity` | `~/.gemini/config/skills/mangaka` |
 | **skills CLI**, for you (MiniMax Code) | `npx skills add justinjd00/mangaka -g -a minimax-code` | `~/.minimax/skills/mangaka` |
 | **skills CLI**, for one project | `npx skills add justinjd00/mangaka` | `.claude/skills/mangaka` for Claude Code, `.agents/skills/mangaka` for Codex, OpenCode and Antigravity, `.minimax/skills/mangaka` for MiniMax Code |
 | **git**, for you (Claude Code) | `git clone https://github.com/justinjd00/mangaka.git ~/.claude/skills/mangaka` | `~/.claude/skills/mangaka` |
 | **git**, for you (Codex) | `git clone https://github.com/justinjd00/mangaka.git ~/.agents/skills/mangaka` | `~/.agents/skills/mangaka` |
 | **git**, for you (OpenCode) | `git clone https://github.com/justinjd00/mangaka.git ~/.config/opencode/skills/mangaka` | `~/.config/opencode/skills/mangaka` |
-| **git**, for you (Antigravity) | `git clone https://github.com/justinjd00/mangaka.git ~/.gemini/antigravity/skills/mangaka` | `~/.gemini/antigravity/skills/mangaka` |
+| **git**, for you (Antigravity) | `git clone https://github.com/justinjd00/mangaka.git ~/.gemini/config/skills/mangaka` | `~/.gemini/config/skills/mangaka` |
 | **git**, for you (MiniMax Code) | `git clone https://github.com/justinjd00/mangaka.git ~/.minimax/skills/mangaka` | `~/.minimax/skills/mangaka` |
 | **Download**, no git | see below | any of the folders above |
 
@@ -110,7 +110,11 @@ mangaka is a standard [Agent Skill](https://agentskills.io): a folder with a `SK
 
 <br>
 
-The [`skills`](https://github.com/vercel-labs/skills) CLI finds the `SKILL.md` at the root of this repository and installs it as `mangaka`. By default it installs into the current project and asks which agents to set up; `-g` installs it for your user, and `-a` picks one agent. The CLI copies the whole repository, including the two bundled models and the built examples (about 40 MB).
+The [`skills`](https://github.com/vercel-labs/skills) CLI finds the `SKILL.md` at the root of this repository and installs it as `mangaka`. By default it installs into the current project and asks which agents to set up; `-g` installs it for your user, and `-a` picks the agent (repeat it for several).
+
+With one agent, the CLI copies the skill straight into that agent's folder, as in the table. With several agents it asks how to install: **Symlink** (the default, also with `-y`) puts one copy in `~/.agents/skills/mangaka` (`.agents/skills/mangaka` in a project) and links each agent's folder to it; **Copy** (or `--copy`) gives each agent its own copy. Either way it copies the whole repository except `.git`, including the two bundled models and the built examples (about 40 MB). The scripts resolve their own location through such links, so a symlinked install works like a copied one.
+
+The CLI itself needs Node.js 22.20 or later (mangaka needs 20.10 or later). The agent names and folders above were checked against `skills` 1.8.1; run `npx skills add --help` if a later version differs.
 
 </details>
 
@@ -128,7 +132,7 @@ Clone the repository into a skills folder so that `SKILL.md` ends up at `<skills
 
 <br>
 
-[Download the ZIP](https://github.com/justinjd00/mangaka/archive/refs/heads/main.zip), unpack it, rename the folder from `mangaka-main` to `mangaka`, and move it into `~/.claude/skills/` (Claude Code), `~/.agents/skills/` (Codex), `~/.config/opencode/skills/` (OpenCode), `~/.gemini/antigravity/skills/` (Antigravity) or `~/.minimax/skills/` (MiniMax Code).
+[Download the ZIP](https://github.com/justinjd00/mangaka/archive/refs/heads/main.zip), unpack it, rename the folder from `mangaka-main` to `mangaka`, and move it into `~/.claude/skills/` (Claude Code), `~/.agents/skills/` (Codex), `~/.config/opencode/skills/` (OpenCode), `~/.gemini/config/skills/` (Antigravity) or `~/.minimax/skills/` (MiniMax Code).
 
 On macOS or Linux, in one line (change the target folder for another agent):
 
@@ -192,7 +196,7 @@ Habits that get the best pages:
 
 - **[`SKILL.md`](SKILL.md)** is what the agent reads: size the job, write the script first, cast and set, block the scene, choose shots, build, direct the ink, letter, verify like an editor, rework. It holds the craft rules in short form.
 - **[`kit/`](kit)** is the engine. `sdf.mjs` describes forms as distance fields with plain-data descriptions; `parts/` is a library of armour, weapons, architecture and props; `vrm.mjs` loads and poses VRM models in pure Node; `shade.mjs` renders forms and characters into one z-buffer with one shadow map; `ink.mjs` traces the result into screentone, blacks, hatching and brush outlines; `lettering.mjs` sets bubbles, captions and sound effects with the real font metrics; `page.mjs` assembles the page, writes the viewer and caches each panel by a hash of everything that reaches its ink.
-- **Determinism.** Every random choice is seeded from stable keys (panel id, part name, layer, screen cell). The same page file builds to the same bytes on any machine, and a change in one place cannot reshuffle ink elsewhere. That is what makes a region rework provable.
+- **Determinism.** Every random choice is seeded from stable keys (panel id, part name, layer, screen cell). The same page file builds to the same bytes on any machine with the same Node.js major version, and a change in one place cannot reshuffle ink elsewhere. That is what makes a region rework provable.
 - **[`references/`](references)** are the long-form guides the agent opens when it needs them: the kit API, characters, ink, layout, lettering, rework, verification, craft and a walkthrough of one page.
 - **Verification.** [`scripts/check.mjs`](scripts/check.mjs) checks tone balance per panel, the size budget, lettering inside its panel, bubble order and (with `--page`) that two builds give the same bytes. [`scripts/capture.mjs`](scripts/capture.mjs) and [`scripts/sheet.mjs`](scripts/sheet.mjs) take Chrome screenshots, close-ups and a contact sheet. [`scripts/rework.mjs`](scripts/rework.mjs) and [`scripts/diff.mjs`](scripts/diff.mjs) rebuild one panel and prove every changed stroke lies inside the region. The skill tells the agent to read every PNG it makes.
 
@@ -236,7 +240,7 @@ mangaka/
 | | Needed for | Notes |
 |---|---|---|
 | **[Claude Code](https://code.claude.com/docs/en/overview)**, or [Codex](https://developers.openai.com/codex/skills), [OpenCode](https://opencode.ai/docs/skills/), [Antigravity](https://antigravity.google) or [MiniMax Code](https://github.com/MiniMax-AI/minimax-code) | everything | The skill is written for Claude Code and follows the open Agent Skills format. |
-| **Node.js 20.10+** | builds, kit, checks | Built-in modules only. CI builds the examples on Node 20 and 22. |
+| **Node.js 20.10+** | builds, kit, checks | Built-in modules only. CI builds the examples on Node 20 and 22. The committed example outputs are built with Node 22; CI checks that a Node 22 build reproduces them byte for byte. |
 | **Chrome or Chromium** | screenshots and contact sheets | Found in the usual places on Linux, macOS and Windows; set `CHROME_PATH` for any other binary. Builds and `check.mjs` work without it. |
 
 A cold build takes about 10 to 20 seconds per panel on one core (the five-panel rooftop page about 75 seconds). Unchanged panels come from the cache at once, so a rework costs one panel's build.

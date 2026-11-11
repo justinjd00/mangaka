@@ -23,7 +23,7 @@ To use your working copy as the skill while you change it, link it into your per
 ln -s "$PWD" ~/.claude/skills/mangaka
 ```
 
-For Codex use `~/.agents/skills/mangaka`, for OpenCode `~/.config/opencode/skills/mangaka`, for Antigravity `~/.gemini/antigravity/skills/mangaka`, for MiniMax Code `~/.minimax/skills/mangaka`.
+For Codex use `~/.agents/skills/mangaka`, for OpenCode `~/.config/opencode/skills/mangaka`, for Antigravity `~/.gemini/config/skills/mangaka`, for MiniMax Code `~/.minimax/skills/mangaka`.
 
 ## Tests
 
@@ -71,7 +71,7 @@ For a change to the rework path, run a rework on a copy of an example and prove 
 A pull request that breaks one of these will be asked to change.
 
 - **Zero dependencies.** Node built-ins only, ESM `.mjs`. No `node_modules`, no build step. `package.json` exists for `"type": "module"` and the test script.
-- **Determinism.** The same page file builds to byte-identical SVG on any machine. No `Math.random`, no `Date`, nothing locale-dependent in anything that reaches an output file. All randomness comes from `kit/rng.mjs`, seeded from stable keys, and ink in one screen region must not depend on a random sequence used elsewhere.
+- **Determinism.** The same page file builds to byte-identical SVG on any machine with the same Node.js major version (the committed examples are built with Node 22). No `Math.random`, no `Date`, nothing locale-dependent in anything that reaches an output file. All randomness comes from `kit/rng.mjs`, seeded from stable keys, and ink in one screen region must not depend on a random sequence used elsewhere.
 - **Kit changes keep the examples.** A change to `kit/` either leaves every committed page byte-identical, or the pull request says which pages change and why and commits the rebuilt pages.
 - **Original characters only.** Examples, docs and issues use original characters and original pages. No named characters from other works, no reproduction of existing manga pages.
 - **CC0 models only.** A model added to `models/` must say CC0 in its own VRM metadata (`licenseName`), with its licence fields recorded in `models/README.md`. Models are never modified.

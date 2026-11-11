@@ -45,5 +45,14 @@ jobs:
           node scripts/build.mjs examples/duel/page.mjs --no-cache
           node scripts/check.mjs examples/duel
 
+      - name: Committed example outputs match this build
+        # The committed outputs are built with Node 22; bytes are only promised within one Node major.
+        if: matrix.node == 22
+        run: |
+          git diff --exit-code --stat -- examples/ || {
+            echo "::error::Committed example outputs drifted from this build. Rebuild with 'node scripts/build.mjs examples/<name>/page.mjs --no-cache' on Node 22 and commit the results."
+            exit 1
+          }
+
       - name: Rebuild fingerprint
         run: node scripts/fingerprint.mjs examples/rooftop/page.mjs
