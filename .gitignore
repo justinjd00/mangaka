@@ -1,0 +1,5 @@
+.superpowers/
+.mangaka/
+node_modules/
+shots/
+*.log
