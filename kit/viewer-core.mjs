@@ -26,9 +26,20 @@ function clip(a, b) {
   return x1 > x0 && y1 > y0 ? [x0, y0, x1 - x0, y1 - y0] : null;
 }
 
+/** Whether (x, y) lies inside the polygon [[x, y], ...] (even-odd rule). */
+function inPolygon(poly, x, y) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
 /**
  * The panel under a page rect [x, y, w, h] (page pixels) and what it covers.
- * The panel is the smallest one holding the rect's centre (insets sit on top);
+ * The panel is the smallest one holding the rect's centre (insets sit on top;
+ * a panel with a clip polygon holds only the points inside it);
  * when no panel holds it, the one overlapping the rect most. Returns
  * { panel, region, parts }: region is the rect clipped to the panel as
  * fractions of the panel rect (two decimals), parts are the top eight part
@@ -39,7 +50,7 @@ function clip(a, b) {
 export function partsInRect(map, rect) {
   const cx = rect[0] + rect[2] / 2, cy = rect[1] + rect[3] / 2;
   const area = p => p.rect[2] * p.rect[3];
-  const holding = map.panels.filter(p => cx >= p.rect[0] && cx < p.rect[0] + p.rect[2] && cy >= p.rect[1] && cy < p.rect[1] + p.rect[3]);
+  const holding = map.panels.filter(p => cx >= p.rect[0] && cx < p.rect[0] + p.rect[2] && cy >= p.rect[1] && cy < p.rect[1] + p.rect[3] && (!p.clip || inPolygon(p.clip, cx, cy)));
   let panel = holding.sort((a, b) => area(a) - area(b))[0] ?? null;
   if (!panel) {
     let best = 0;

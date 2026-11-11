@@ -157,3 +157,25 @@ test('effects are deterministic, seeded by the panel and local to their cells', 
     assert.ok(l[0].d.length > 0 && /^M[-\d.]/.test(l[0].d));
   }
 });
+
+test('a clip polygon shapes a panel: ink, white ground and frame follow it, and the viewer honours it', async () => {
+  const { partsInRect } = await import('../kit/viewer-core.mjs');
+  const spec = () => ({
+    size: [200, 100],
+    panels: [
+      { id: 'l', rect: [4, 4, 192, 92], clip: [[4, 4], [120, 4], [80, 96], [4, 96]], scene: ballScene(), camera: { scale: 60, target: [0, 0.4, 0] } },
+      { id: 'r', rect: [4, 4, 192, 92], clip: [[128, 4], [196, 4], [196, 96], [88, 96]], scene: ballScene(), camera: { scale: 60, target: [0, 0.4, 0] } },
+    ],
+  });
+  const bad = (clip, re) => { const s = spec(); s.panels[0].clip = clip; assert.throws(() => definePage(s), re); };
+  bad([[0, 0], [1, 1]], /panel "l": clip/);
+  bad([[0, 0], [1, 1], [2]], /panel "l": clip/);
+  const { svg, map } = buildPage(spec());
+  const l = svg.slice(svg.indexOf('<g id="l"'), svg.indexOf('<g id="r"'));
+  assert.ok(l.includes('<clipPath id="l-clip"><polygon points="0,0 116,0 76,92 0,92"/></clipPath>'), l.slice(0, 300));
+  assert.ok(l.includes('<polygon points="0,0 116,0 76,92 0,92" fill="#fff"/>'));
+  assert.ok(l.includes('<polygon points="0,0 116,0 76,92 0,92" fill="none" stroke="#000" stroke-width="4.5" stroke-linejoin="miter"/>'));
+  assert.deepEqual(map.panels[0].clip, [[4, 4], [120, 4], [80, 96], [4, 96]]);
+  assert.equal(partsInRect(map, [20, 40, 4, 4]).panel, 'l');
+  assert.equal(partsInRect(map, [170, 40, 4, 4]).panel, 'r');
+});

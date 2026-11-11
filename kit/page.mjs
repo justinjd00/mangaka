@@ -22,12 +22,17 @@ const r4 = v => round(v * 10000) / 10000;
 const isNum = v => typeof v === 'number' && Number.isFinite(v);
 const isVec = (v, n) => Array.isArray(v) && v.length === n && v.every(isNum);
 
-const PANEL_DEFAULTS = { ss: 1, scene: null, actors: [], background: null, light: {}, style: null, regions: [], effects: [], frame: 4.5, inset: false };
+const PANEL_DEFAULTS = { ss: 1, scene: null, actors: [], background: null, light: {}, style: null, regions: [], effects: [], frame: 4.5, inset: false, clip: null };
 
 /**
  * Validate a page spec. Panels may also carry `shade: { fill, aoRadius,
  * skinDetail, shineAt }` (passed to renderPanel) and actors `hands: { left, right }`
- * (through withHands). Insets default to a 7 px white gutter. Returns a normalised copy with defaults filled in;
+ * (through withHands). Insets default to a 7 px white gutter. A panel's scene may
+ * be a function ({ actors }) => scene() called with the panel's posed actors,
+ * { [name]: { model, result } } where result holds bonePos and boneRot (see
+ * kit/attach.mjs boneFrame), so props can follow bones. `clip` is an optional
+ * polygon [[x, y], ...] in page pixels: the panel's ink, white ground and frame
+ * follow it instead of the rect (keep it inside the rect). Returns a normalised copy with defaults filled in;
  * scenes, models and functions are kept by reference. Errors name the panel
  * id (or index) and the field.
  */
@@ -52,7 +57,8 @@ export function definePage(spec) {
     const q = { ...PANEL_DEFAULTS, ...p };
     q.gutter = p.gutter ?? (q.inset ? 7 : 0);
     if (!(isNum(q.ss) && q.ss > 0 && q.ss <= 4)) fail('ss must be a number in (0, 4]');
-    if (q.scene !== null && (!q.scene || !Array.isArray(q.scene.parts))) fail('scene must come from scene()');
+    if (q.scene !== null && typeof q.scene !== 'function' && (!q.scene || !Array.isArray(q.scene.parts))) fail('scene must come from scene() or be a function ({ actors }) => scene');
+    if (q.clip !== null && !(Array.isArray(q.clip) && q.clip.length >= 3 && q.clip.every(v => isVec(v, 2)))) fail('clip must be a polygon [[x, y], ...] of at least 3 points');
     if (!Array.isArray(q.actors)) fail('actors must be an array');
     const names = new Set();
     q.actors = q.actors.map((a, ai) => {
@@ -87,6 +93,23 @@ export function definePage(spec) {
     return item;
   });
   return { ...spec, size: [...spec.size], reading, style, title: spec.title ?? 'mangaka page', panels, lettering };
+}
+
+/**
+ * A panel's scene: p.scene itself, or for a scene function its result for the
+ * posed actors ({ [name]: { model, result: { bonePos, boneRot } } }; the model
+ * loads only when read).
+ */
+function sceneOf(p, acts, frames, modelOf) {
+  if (typeof p.scene !== 'function') return p.scene;
+  const actors = {};
+  for (const t of acts) {
+    actors[t.a.name] = { result: { bonePos: frames[t.a.name].bonePos, boneRot: frames[t.a.name].boneRot } };
+    Object.defineProperty(actors[t.a.name], 'model', { get: () => modelOf(t.a.model), enumerable: true });
+  }
+  const sc = p.scene({ actors });
+  if (!sc || !Array.isArray(sc.parts) || !Array.isArray(sc.decals)) throw new Error(`panel "${p.id}": scene function must return a scene()`);
+  return sc;
 }
 
 /** One panel's camera spec in panel pixels (cx, cy filled in). */
@@ -143,15 +166,19 @@ function panelSvg(p, k, effects) {
   ].join('');
   const fx = effects.map(l => (l.d ? `<path d="${l.d}" fill="${l.fill}" stroke="${l.stroke}"${l.stroke !== 'none' ? ` stroke-width="${f2(l.width)}"` : ''}${l.opacity !== 1 ? ` opacity="${l.opacity}"` : ''}/>` : '')).join('');
   const g = p.gutter;
+  // The panel's outline in panel pixels: its rect, or its clip polygon.
+  const shape = p.clip
+    ? attrs => `<polygon points="${p.clip.map(([px, py]) => `${f1(px - x)},${f1(py - y)}`).join(' ')}"${attrs}/>`
+    : attrs => `<rect width="${f1(w)}" height="${f1(h)}"${attrs}/>`;
   return `<g id="${id}" transform="translate(${f1(x)} ${f1(y)})">` +
     (g ? `<rect x="${f1(-g)}" y="${f1(-g)}" width="${f1(w + 2 * g)}" height="${f1(h + 2 * g)}" fill="#fff"/>` : '') +
-    `<defs><clipPath id="${id}-clip"><rect width="${f1(w)}" height="${f1(h)}"/></clipPath>${dot('t1', 0.72)}${dot('t2', 1.3)}</defs>` +
-    `<rect width="${f1(w)}" height="${f1(h)}" fill="#fff"/>` +
+    `<defs><clipPath id="${id}-clip">${shape('')}</clipPath>${dot('t1', 0.72)}${dot('t2', 1.3)}</defs>` +
+    shape(' fill="#fff"') +
     `<g clip-path="url(#${id}-clip)">` +
     `<g transform="scale(${round(1e6 / ss) / 1e6})" fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">${ink}</g>` +
     (fx ? `<g stroke-linecap="round">${fx}</g>` : '') +
     `</g>` +
-    (p.frame ? `<rect width="${f1(w)}" height="${f1(h)}" fill="none" stroke="#000" stroke-width="${f2(p.frame)}"/>` : '') +
+    (p.frame ? shape(` fill="none" stroke="#000" stroke-width="${f2(p.frame)}"${p.clip ? ' stroke-linejoin="miter"' : ''}`) : '') +
     `</g>`;
 }
 
@@ -237,15 +264,15 @@ function readEntry(cacheDir, id, key) {
  * The cache key of one panel, or throws Uncacheable. `acts` are the panel's
  * actors with resolved pose and model content hash; `camera` is resolved.
  */
-function panelKey(p, style, camera, acts) {
-  const parts = p.scene ? p.scene.parts.map((q, i) => { const { sdf, ...rest } = q; void sdf; return canon(rest, `scene.parts[${i}]`); }) : [];
+function panelKey(p, scene, style, camera, acts) {
+  const parts = scene ? scene.parts.map((q, i) => { const { sdf, ...rest } = q; void sdf; return canon(rest, `scene.parts[${i}]`); }) : [];
   return keyOf({
     v: CACHE_VERSION, kit: kitFingerprint(),
-    id: p.id, rect: p.rect, ss: p.ss, frame: p.frame, gutter: p.gutter, inset: !!p.inset,
+    id: p.id, rect: p.rect, clip: p.clip, ss: p.ss, frame: p.frame, gutter: p.gutter, inset: !!p.inset,
     style: canon(style, 'style'), regions: canon(p.regions, 'regions'), camera: canon(camera, 'camera'),
     background: canon(p.background, 'background'), light: canon(p.light, 'light'), shade: canon(p.shade ?? null, 'shade'),
     effects: p.effects.map((e, i) => { const { layers, ...desc } = e; void layers; return canon(desc, `effects[${i}]`); }),
-    parts, decals: canon(p.scene ? p.scene.decals : [], 'scene.decals'),
+    parts, decals: canon(scene ? scene.decals : [], 'scene.decals'),
     actors: acts.map(t => {
       if (!t.modelHash) throw new Uncacheable(`actor "${t.a.name}": model is a loaded object, not a file`);
       return { name: t.a.name, hair: canon(t.a.hair ?? null, 'hair'), pose: canon(t.pose, 'pose'), expr: canon(t.expr, 'expr'), root: canon(t.root, 'root'), model: t.modelHash };
@@ -291,28 +318,32 @@ export function buildPage(spec, { dir = null, cacheDir = null, onPanel = null, w
       t.posed = () => (t.done ??= poseVRM(modelOf(a.model), { pose: t.pose, expr: t.expr, root: t.root }));
       return t;
     });
-    const bones = {};
+    const bones = {}, frames = {};
     for (const t of acts) {
-      let bonePos = null, file = null;
+      let entry = null, file = null;
       if (cacheDir && t.modelHash) {
         try {
           const key = keyOf({ v: CACHE_VERSION, kit: kitFingerprint(), model: t.modelHash, pose: canon(t.pose, 'pose'), expr: canon(t.expr, 'expr'), root: canon(t.root, 'root') });
           file = join(cacheDir, 'bones', `${key}.json`);
-          bonePos = readJson(file);
+          entry = readJson(file);
+          if (!entry?.bonePos || !entry?.boneRot) entry = null;
         } catch (e) { if (!(e instanceof Uncacheable)) throw e; }
       }
-      if (!bonePos) {
-        bonePos = t.posed().bonePos;
-        if (file) { mkdirSync(join(cacheDir, 'bones'), { recursive: true }); writeJson(file, bonePos); }
+      if (!entry) {
+        const { bonePos, boneRot } = t.posed();
+        entry = { bonePos, boneRot };
+        if (file) { mkdirSync(join(cacheDir, 'bones'), { recursive: true }); writeJson(file, entry); }
       }
-      bones[t.a.name] = bonePos;
+      bones[t.a.name] = entry.bonePos;
+      frames[t.a.name] = entry;
     }
     const camera = cameraOf(p, bones);
+    const scene = sceneOf(p, acts, frames, modelOf);
     const style = resolveStyle(p.style ?? page.style);
 
     let key = null, uncacheable = null, entry = null;
     if (cacheDir) {
-      try { key = panelKey(p, style, camera, acts); } catch (e) { if (!(e instanceof Uncacheable)) throw e; uncacheable = e.message; }
+      try { key = panelKey(p, scene, style, camera, acts); } catch (e) { if (!(e instanceof Uncacheable)) throw e; uncacheable = e.message; }
       if (key) entry = readEntry(cacheDir, p.id, key);
     }
     const cached = !!entry;
@@ -320,7 +351,7 @@ export function buildPage(spec, { dir = null, cacheDir = null, onPanel = null, w
       const actors = acts.map(t => ({ name: t.a.name, model: modelOf(t.a.model), posed: t.posed().posed, hair: t.a.hair }));
       const W = round(w * ss), H = round(h * ss);
       const camSpec = { ...camera, scale: camera.scale * ss, cx: camera.cx * ss, cy: camera.cy * ss, W, H };
-      const r = renderPanel({ ...(p.shade || {}), scene: p.scene, actors, cam: camSpec, background: scaled(p.background ?? flat(0), ss), light: p.light });
+      const r = renderPanel({ ...(p.shade || {}), scene, actors, cam: camSpec, background: scaled(p.background ?? flat(0), ss), light: p.light });
       const k = inkPanel(r, { style, seed: p.id, regions: p.regions, ss });
       const effects = p.effects.flatMap(e => e.layers(w, h, { seed: p.id }));
       let black = 0, tone = 0;
@@ -329,7 +360,7 @@ export function buildPage(spec, { dir = null, cacheDir = null, onPanel = null, w
       entry = {
         svg: panelSvg(p, k, effects),
         stats: { id: p.id, style: style.name ?? null, balance: style.balance ?? null, black: r4(black / N), tone: r4(tone / N), white: r4((N - black - tone) / N), strokes: strokeCounts(k, effects) },
-        map: { id: p.id, rect: [...p.rect], ss, camera, parts: r.parts.map(q => q.name), rle: encodeMap(r.buf.id, W, H, w, h, ss) },
+        map: { id: p.id, rect: [...p.rect], ...(p.clip ? { clip: p.clip.map(v => [...v]) } : {}), ss, camera, parts: r.parts.map(q => q.name), rle: encodeMap(r.buf.id, W, H, w, h, ss) },
       };
       // Store what a hit will read back, so hits and misses give the same bytes.
       if (key) { writeEntry(cacheDir, p.id, key, entry); entry = JSON.parse(JSON.stringify(entry)); }
