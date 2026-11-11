@@ -18,7 +18,7 @@ Three throwaway probes back this design (knight page, face page v2, face page v3
 1. **Pages.** Build a manga page from a page spec: panel layout, one camera per panel, scene references, lettering, effects. Output a standalone SVG and an HTML viewer.
 2. **Scenes.** Describe a scene as data: forms (primitives and operations), materials, surface drawings, hair, lights.
 3. **Ink.** Convert a rendered panel to vector ink: black areas, screentone in two densities, hatching in up to three layers, pressure-varying brush outlines, drawn features, strand hair.
-4. **Characters.** Build heads, faces, hair, hands and posed bodies from a character sheet. Ships as beta until an example meets the quality bar in section 9.
+4. **Characters.** Load anime characters from VRM models, pose them by humanoid bone, set expressions by blend shape, and ink them with the same engine as everything else.
 5. **Lettering.** Speech, thought, shout and whisper bubbles with tails, caption boxes, sound-effect lettering, left-to-right and right-to-left reading order.
 6. **Effects.** Speed lines, focus lines, impact bursts, rain, snow, spatter, tone gradients.
 7. **Region rework.** The reader drags a rectangle over a page in the viewer. The viewer resolves it to a panel and the parts beneath it and produces an instruction the user pastes to the agent. The agent changes only that region and proves the rest of the page is unchanged.
@@ -76,7 +76,7 @@ Five stages, each a module with one job and a plain-data interface. A stage can 
 | `raster` | parts, camera, lights | typed-array buffers: part id, depth, normal, tone, aux | `scene` |
 | `ink` | buffers, style, decals | ink layers as path strings | `raster` output only |
 | `compose` | ink layers per panel, page spec | SVG string, HTML string, map JSON | `ink` output only |
-| `character` | character sheet (data) | scene fragments: parts, drawings, strands | `scene` |
+| `vrm` + `mesh` | VRM file, pose, expression, placement | posed triangles rastered into the same buffers | nothing |
 
 ## 4. Deep dive
 
@@ -129,17 +129,18 @@ Layers, bottom to top:
 
 **Styles.** An ink style is a plain object: black threshold, tone thresholds, per-material hatch fields and thresholds, line weights, taper lengths, hatch spacing. Three presets ship: `seinen-dense` (heavy hatching, few tones), `shonen-clean` (open whites, strong blacks, tone for greys), `tone-soft` (mostly screentone). A style can be overridden per panel, per part or per region.
 
-### 4.4 Characters (beta)
+### 4.4 Characters: actors from VRM models
 
-A character sheet is data: head proportions, feature placement, feature curves, a hair description, body proportions, outfit parts.
+Probes 2 and 3 built heads, hair and hands from code primitives. The result was coarse and was rejected. Probe 4 replaced the source of the shapes: characters are artist-made anime models in the open VRM format, rendered into the same buffers as code-built scenes and inked by the same engine. That probe produced nine distinct characters, poses, a fist and six expressions with no hand work, and was accepted as the way forward.
 
-- **Head:** a parametric form (cranium, jaw, cheek, brow, nose, lips, ears) with named proportions. Presets for adult, youth, heavy and gaunt heads.
-- **Features:** authored curves and shapes projected onto the head: eye with lids, iris, lashes; brows as hair strokes; mouth; nostrils; marks and scars. An **expression** is a set of offsets on those curves (neutral, anger, joy, shock, grief, smirk).
-- **Hair:** locks as 3D guide curves with a width profile. Each lock produces a tapered form for mass and silhouette plus strands. Generators for fringe, side locks, spikes, long fall, tied hair.
-- **Hands:** finger chains with joint angles and a pose library (open, fist, grip, point, relaxed).
-- **Body:** a bone chain with proportions, posed by joint angles or by named poses, dressed with tapered forms and outfit parts.
+- **Source.** A character is a `.vrm` file (VRM 0.x in v1, 1.0 later). Users make their own in VRoid Studio or bring any VRM they have the rights to. The repository ships only models whose own metadata says CC0.
+- **Loader (`kit/vrm.mjs`).** Pure Node: GLB container, accessors, PNG textures (own decoder on `node:zlib`), node hierarchy, skins, morph targets, VRM humanoid bone map, blend shape groups, material classes read from material names and MToon render settings.
+- **Pose.** Rotations per humanoid bone on top of the rest pose, a root transform to place the actor in the scene, and a pose library (stand, walk, run, sit, fight stances, hand shapes). Expressions are blend shape weights: angry, joy, sorrow, fun, surprised, blink, and the five mouth shapes, mixable.
+- **Mesh raster (`kit/mesh.mjs`).** A software triangle rasteriser with z-buffer, alpha cut-out from textures, and per-pixel part id, depth, position, normal and texture luminance. It writes into the same buffers as the distance-field raster, so a knight built in code and a character from a model occlude and shadow each other correctly.
+- **Ink classes.** Skin: white, shadow as tone, painted detail from the texture. Hair: black with a shine band, or light with strand lines; hair strips keep separate ids so their edges become strand lines. Face layers (eyes, brows, lashes, mouth): the artist's texture is turned straight into black, white and tone. Cloth: texture luminance sets the tone level.
+- **Costume and props** come from the model (clothes) and from code (`kit/parts/`: armour, weapons, architecture), attached to bones where needed.
 
-The probes showed a face that reads as a manga face from two cameras and a hand that reads as a hand. They also showed stiff fingers, coarse profile hair and one expression. That gap is why this module is beta in v1.
+Limits, stated in the README: the look is that of a clean anime character, not a hand-inked seinen face; variety depends on the models a user brings; VRoid models share a family resemblance.
 
 ### 4.5 Page spec and compose
 
@@ -221,12 +222,15 @@ mangaka/
 │   ├── lettering.mjs        bubbles, captions, sound effects, font metrics
 │   ├── effects.mjs          lines, weather, spatter, gradients
 │   ├── viewer.mjs           HTML viewer and edit mode (inlined into page.html)
-│   ├── character/           head, features, expression, hair, hands, body, poses
+│   ├── vrm.mjs              VRM loader: GLB, PNG, skins, morphs, humanoid, expressions
+│   ├── mesh.mjs             software triangle raster into the shared buffers
+│   ├── poses.mjs            pose and hand-shape library
 │   ├── parts/               reusable forms: armour, weapons, architecture, props
 │   └── fonts/               vendored OFL fonts and licences
 ├── references/              craft.md, kit.md, characters.md, ink.md, layout.md,
 │                            lettering.md, rework.md, verify.md, walkthrough.md
 ├── scripts/                 build, capture, sheet, check, rework, diff, fingerprint
+├── models/                  CC0 VRM characters with a licence note per file
 ├── examples/                complete pages with committed output
 ├── evals/evals.json         test prompts and what a good answer contains
 ├── tests/                   node:test unit tests and golden fingerprints
@@ -239,7 +243,7 @@ mangaka/
 
 1. **Size it.** Panel, page or chapter. Say what will be built and how long it takes.
 2. **Script first.** Beat, page thumbnails in words (panel count, shot sizes, where the eye goes), dialogue. No geometry yet.
-3. **Cast and set.** A character sheet per character and a parts list per scene. Density is a rule: a hero object has at least 40 named parts.
+3. **Cast and set.** A VRM model per character with a pose and expression plan, and a parts list per code-built object. Density is a rule: a hero object has at least 40 named parts.
 4. **Block the scene.** Place forms and lights once. Panels are cameras.
 5. **Choose shots.** Vary distance and angle. Close-ups get more ink per centimetre for free.
 6. **Build.** `node scripts/build.mjs page.mjs`.
@@ -258,17 +262,18 @@ mangaka/
 | Scene as data | Scene as code | Addressing, caching, determinism, GLSL later | Verbose, no free-form displacement |
 | Authored drawings on surfaces | Features from shading only | A face needs drawn lines; shading alone reads as a 3D render | Each feature needs curve authoring |
 | Node only, no GPU | WebGL build step | Runs anywhere, deterministic | Seconds per panel instead of milliseconds |
-| Characters in code | Import generated images | Consistency, vector, no keys or GPU | Lower ceiling on faces than a strong hand |
+| Characters from VRM models | Characters built in code | Artist-made head, hair, hands and face textures; expressions and poses for free; a panel renders in about a second | Look is bound to the models; users need a VRM per character |
 
 ## 8. What the probes proved and did not
 
-- **Proved:** hard surfaces (armour, weapons, stone), cloth, weather, panels, lettering, screentone, brush outlines, a face from two cameras, black hair with shine, an open hand.
-- **Not proved:** expressions, body poses in action, long hair, more than one face type, crowds, interiors.
-- **Known ceiling:** the references the author showed are hand-drawn by masters of the form. This engine places every stroke by rule. It will reach clean, dense, consistent pages. It will not match a master's line. The README says so.
+- **Proved:** hard surfaces built in code (armour, weapons, stone), cloth, weather, panels, lettering, screentone, brush outlines; VRM characters with poses, hands, expressions; both in one scene with shared depth and shadow; effect backgrounds (focus lines, speed lines) through the same tracer.
+- **Rejected:** faces, hair and hands built from code primitives.
+- **Not proved:** action poses with contact, two characters interacting, long cloth simulation, crowds, interiors.
+- **Known ceiling:** the references the author showed are hand-drawn by masters of the form. This engine places every stroke by rule on top of modelled shapes. It reaches clean, consistent, fully lettered pages. It does not match a master's line. The README says so.
 
 ## 9. Quality bar for leaving beta
 
-A module leaves beta when a committed example passes all checks and its contact sheet shows, at 4×: no bare region on an inked material, no tube-like limb or finger, hair read as strands and not as solids, and a face that holds from three cameras with at least three expressions.
+A feature leaves beta when a committed example passes all checks and its contact sheet shows, at 4×: no bare region on an inked material, clean line ends, readable hands, and a face that holds from three cameras with at least three expressions.
 
 ## 10. Milestones
 
@@ -276,10 +281,10 @@ Each ends with something that runs.
 
 | | Delivers | Proof |
 |---|---|---|
-| **M0** | Repo skeleton, `scene`, `raster`, `materials`, `ink`, `styles` with the determinism rule, unit tests | Knight panel builds twice byte-identical |
+| **M0** | Repo skeleton, `scene`, `raster`, `vrm`, `mesh`, `materials`, `ink`, `styles` with the determinism rule, unit tests | A panel with the knight and a VRM character builds twice byte-identical |
 | **M1** | `page`, `lettering`, `effects`, `viewer`, `build`, `capture`, `sheet`, `check` | Example 1: the knight page, checks at zero |
 | **M2** | Map, edit mode, `rework`, `diff`, tiles and cache | Rework demo: one region changes, diff proves the rest did not |
-| **M3** | `character` module (head, features, expressions, hair, hands, body, poses), `parts` library | Examples 2 and 3: a dialogue page and an action page |
+| **M3** | Pose and hand-shape library, bone-attached props, `parts` library, hair styles (black, light) | Examples 2 and 3: a dialogue page and an action page |
 | **M4** | SKILL.md, references, evals, README with gallery, install matrix, CI | Fresh install runs an eval prompt end to end |
 | **M5** | Workers, performance and size budgets met | Timing and size report in CI |
 
