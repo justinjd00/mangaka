@@ -20,6 +20,8 @@ export const HANDS = {
   fist: hand(FIST, FIST_THUMB),
   point: hand(FIST, FIST_THUMB, { Index: [0.05, 0.05, 0.05] }),
   grip: hand([0.9, 1.0, 0.7], [[0, 0.6, 0.2], [0, 0.4, 0], [0, 0.4, 0]]),
+  // Closed round a sword grip about 0.023 m thick; see kit/attach.mjs for where the grip sits.
+  hilt: hand([1.0, 1.1, 0.8], [[0, 0.6, 0.2], [0, 0.4, 0], [0, 0.4, 0]]),
 };
 
 function handBones(side, shape) {

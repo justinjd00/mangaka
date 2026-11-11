@@ -11,10 +11,11 @@
 //              the thumb side (index finger), +Z to the little finger.
 //   leftHand:  -X runs along the fingers, -Y is the palm normal, -Z points to
 //              the thumb side, +Z to the little finger.
-// A grip held in a right hand curled with HANDS.grip therefore runs along Z,
-// about 0.08 along +X and 0.012 below the palm (-Y); a blade leaving the thumb
-// side points to -Z (examples/duel places a sword with at [0.08, -0.012, 0] and
-// R rotX(-PI / 2)). Bones-only poses (poseVRM skin: false) are enough here.
+// A sword grip of radius 0.0115 held in a right hand closed with HANDS.hilt
+// sits at [0.065, -0.032, 0] in the hand frame (between the palm and the curled
+// fingers, checked on mesh cross-sections and close-up renders of fumiriya),
+// running along Z, with the blade leaving the thumb side towards -Z: place the
+// sword with at [0.065, -0.032, 0], R rotX(-PI / 2) and gripR 0.0115. Bones-only poses (poseVRM skin: false) are enough here.
 import * as S from './sdf.mjs';
 
 const isPoint = v => Array.isArray(v) && v.length === 3 && v.every(x => typeof x === 'number');
@@ -22,6 +23,8 @@ const isPoint = v => Array.isArray(v) && v.length === 3 && v.every(x => typeof x
 /**
  * The world frame of a humanoid bone after the flip and root transform:
  * { origin, R }. `result` is what poseVRM returned (it needs bonePos and boneRot).
+ * `model` is only used to list the known bones in the error and may be null;
+ * pass null from a scene function so a cached build never loads the model.
  */
 export function boneFrame(model, result, bone) {
   const origin = result?.bonePos?.[bone], R = result?.boneRot?.[bone];

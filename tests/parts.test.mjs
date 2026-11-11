@@ -76,7 +76,7 @@ test('alignY takes +Y to the direction and is a rotation', () => {
   }
 });
 
-const handPose = arm => withHands({ ...POSES.stand, ...arm }, { right: 'grip' });
+const handPose = arm => withHands({ ...POSES.stand, ...arm }, { right: 'hilt' });
 
 test('boneFrame gives the hand position and an orthonormal rotation', () => {
   const res = poseVRM(model, { pose: POSES.stand, root: { pos: [0.5, 0, -1], yaw: 0.7 } });
@@ -90,13 +90,15 @@ test('boneFrame gives the hand position and an orthonormal rotation', () => {
   assert.ok(local(res.bonePos.rightMiddleProximal)[0] > 0.05);
   assert.ok(local(res.bonePos.rightIndexProximal)[2] < local(res.bonePos.rightLittleProximal)[2]);
   assert.throws(() => boneFrame(model, res, 'tail'), /no bone "tail"/);
+  assert.deepEqual(boneFrame(null, res, 'rightHand'), f);
+  assert.throws(() => boneFrame(null, res, 'tail'), /no bone "tail"/);
 });
 
 test('attachTo moves a prop with the hand and maps decals and anchors', () => {
   const swordIn = res => {
     const sc = S.scene();
     const frame = boneFrame(model, res, 'rightHand');
-    const a = attachTo(sc, frame, local => weapons.sword(local, 'kid.sword', { at: [0.08, -0.012, 0], R: S.rotX(-Math.PI / 2) }));
+    const a = attachTo(sc, frame, local => weapons.sword(local, 'kid.sword', { at: [0.065, -0.032, 0], R: S.rotX(-Math.PI / 2) }));
     return { sc, frame, a };
   };
   const down = poseVRM(model, { pose: handPose({}) });
@@ -106,7 +108,7 @@ test('attachTo moves a prop with the hand and maps decals and anchors', () => {
   assert.ok(moved > 0.3, 'the two poses should move the hand');
   for (const { sc, frame, a } of [A, B]) {
     // Anchors come back in world space, and the forms sit on them.
-    assert.deepEqual(a.grip, toWorld(frame, [0.08, -0.012, 0]));
+    assert.deepEqual(a.grip, toWorld(frame, [0.065, -0.032, 0]));
     assert.ok(Math.hypot(...[0, 1, 2].map(i => a.grip[i] - frame.origin[i])) < 0.1);
     const blade = sc.parts.find(p => p.name === 'kid.sword.blade').sdf;
     const mid = [0, 1, 2].map(i => (a.guard[i] + a.tip[i]) / 2);
@@ -133,7 +135,7 @@ test('a scene function is called with the posed actors, cached and rebuilt when 
       scene: ({ actors }) => {
         calls.push(Object.keys(actors));
         const sc = S.scene();
-        attachTo(sc, boneFrame(actors.kid.model, actors.kid.result, 'rightHand'), local => weapons.sword(local, 'kid.sword', { at: [0.08, -0.012, 0], R: S.rotX(-Math.PI / 2), blade }));
+        attachTo(sc, boneFrame(null, actors.kid.result, 'rightHand'), local => weapons.sword(local, 'kid.sword', { at: [0.065, -0.032, 0], R: S.rotX(-Math.PI / 2), blade }));
         return sc;
       },
       camera: ({ bones }) => ({ scale: 40, target: [bones.kid.hips[0], 0.9, bones.kid.hips[2]] }),

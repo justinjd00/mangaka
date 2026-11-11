@@ -6,7 +6,7 @@ import { HANDS, POSES, withHands, mirrorPose, mixPose } from '../kit/poses.mjs';
 const model = loadVRM(new URL('../models/fumiriya.vrm', import.meta.url).pathname);
 
 test('library has the documented names', () => {
-  assert.deepEqual(Object.keys(HANDS), ['open', 'relaxed', 'fist', 'point', 'grip']);
+  assert.deepEqual(Object.keys(HANDS), ['open', 'relaxed', 'fist', 'point', 'grip', 'hilt']);
   assert.deepEqual(Object.keys(POSES), ['tpose', 'stand', 'relaxed', 'guard', 'reach', 'walk', 'run', 'sit']);
 });
 

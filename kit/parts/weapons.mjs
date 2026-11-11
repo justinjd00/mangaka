@@ -41,11 +41,11 @@ export function poleaxe(sc, prefix, { at = null, R = null, length = 2.28 } = {})
 
 /**
  * Sword with a lozenge-section blade tapering to a point, crossguard, wrapped
- * grip and pommel. The origin is the middle of the grip, the blade runs up +Y
+ * grip (radius gripR) and pommel. The origin is the middle of the grip, the blade runs up +Y
  * with its flat facing Z. grip 0 leaves out grip and pommel (a broken hilt).
  * Returns { grip, guard, tip, pommel }.
  */
-export function sword(sc, prefix, { at = null, R = null, blade = 0.75, width = 0.022, thick = 0.0045, guard = 0.09, grip = 0.18 } = {}) {
+export function sword(sc, prefix, { at = null, R = null, blade = 0.75, width = 0.022, thick = 0.0045, guard = 0.09, grip = 0.18, gripR = 0.0135 } = {}) {
   return placed(sc, { at, R }, s => {
     const g2 = grip / 2, y0 = g2 + 0.022, y1 = y0 + blade, tipL = min(blade * 0.5, width * 3.5);
     s.add(`${prefix}.blade`, 'metal', S.raw((x, y, z) => {
@@ -58,7 +58,7 @@ export function sword(sc, prefix, { at = null, R = null, blade = 0.75, width = 0
     s.add(`${prefix}.guard`, 'metalD', S.box([0, g2 + 0.011, 0], [guard, 0.011, 0.015], 0.005));
     const out = { grip: [0, 0, 0], guard: [0, g2 + 0.011, 0], tip: [0, y1, 0], pommel: [0, -g2, 0] };
     if (grip > 0) {
-      s.add(`${prefix}.grip`, 'leather', dSaw(S.cyl([0, -g2, 0], [0, g2, 0], 0.0135), [0, -g2, 0], [0.3, 1, 0], 0.018, 0.003, 0.003, 0.45));
+      s.add(`${prefix}.grip`, 'leather', dSaw(S.cyl([0, -g2, 0], [0, g2, 0], gripR), [0, -g2, 0], [0.3, 1, 0], 0.018, 0.003, 0.003, 0.45));
       s.add(`${prefix}.pommel`, 'metalD', S.ellipsoid([0, -g2 - 0.02, 0], [0.026, 0.022, 0.02]));
       out.pommel = [0, -g2 - 0.04, 0];
     }
