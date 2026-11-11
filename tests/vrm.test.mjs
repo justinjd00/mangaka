@@ -1,0 +1,78 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { loadVRM, poseVRM, partNamer } from '../kit/vrm.mjs';
+import { POSES } from '../kit/poses.mjs';
+
+const MODEL = new URL('../models/fumiriya.vrm', import.meta.url).pathname;
+const model = loadVRM(MODEL);
+
+test('loads a VRM with metadata and a humanoid skeleton', () => {
+  assert.equal(model.meta.licenseName, 'CC0');
+  assert.ok(Object.keys(model.bones).length >= 50);
+  assert.ok(model.prims.length > 0);
+  assert.deepEqual(new Set(model.materials.map(m => m.cls)), new Set(['skin', 'hair', 'cloth', 'tex']));
+});
+
+test('standing pose lowers the hand below the shoulder', () => {
+  const { bonePos } = poseVRM(model, { pose: POSES.stand });
+  assert.ok(bonePos.leftHand[1] < bonePos.leftUpperArm[1]);
+});
+
+test('model faces +Z after the default flip and root moves it', () => {
+  const { bonePos } = poseVRM(model);
+  assert.ok(bonePos.leftFoot[2] > bonePos.hips[2] - 0.2);
+  const moved = poseVRM(model, { root: { pos: [1, 0, 2], yaw: 0 } }).bonePos;
+  assert.ok(Math.abs(moved.hips[0] - bonePos.hips[0] - 1) < 1e-6);
+  assert.ok(Math.abs(moved.hips[2] - bonePos.hips[2] - 2) < 1e-6);
+});
+
+test('expression morphs change face vertices', () => {
+  const rest = poseVRM(model).posed, open = poseVRM(model, { expr: { a: 1 } }).posed;
+  const changed = rest.some((r, i) => {
+    if (!/Face/.test(r.prim.name)) return false;
+    const o = open[i].wp;
+    for (let k = 0; k < o.length; k++) if (o[k] !== r.wp[k]) return true;
+    return false;
+  });
+  assert.ok(changed);
+});
+
+test('partNamer gives stable names', () => {
+  const name = partNamer('hero');
+  const names = model.prims.map(p => name(p, model.materials[p.mat]));
+  assert.deepEqual(names, model.prims.map(p => name(p, model.materials[p.mat])));
+  assert.ok(names.includes('hero.skin'));
+  assert.ok(names.some(n => /^hero\.hair\.\d+$/.test(n)));
+  assert.ok(names.includes('hero.Tops'));
+  assert.ok(names.includes('hero.FaceBrow'));
+  assert.equal(new Set(names.filter(n => n.includes('.hair.'))).size, names.filter(n => n.includes('.hair.')).length);
+});
+
+function glb(json) {
+  const body = Buffer.from(JSON.stringify(json));
+  const pad = Buffer.alloc((4 - body.length % 4) % 4, 0x20);
+  const chunk = Buffer.concat([body, pad]);
+  const head = Buffer.alloc(20);
+  head.write('glTF', 0, 'ascii'); head.writeUInt32LE(2, 4); head.writeUInt32LE(20 + chunk.length, 8);
+  head.writeUInt32LE(chunk.length, 12); head.write('JSON', 16, 'ascii');
+  return Buffer.concat([head, chunk]);
+}
+function crafted(json) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mangaka-'));
+  const file = path.join(dir, 'x.glb');
+  fs.writeFileSync(file, glb(json));
+  return file;
+}
+
+test('VRM 1.0 files are rejected', () => {
+  const f = crafted({ asset: { version: '2.0' }, extensions: { VRMC_vrm: {} } });
+  assert.throws(() => loadVRM(f), { message: 'VRM 1.0 is not supported yet; export as VRM 0.x' });
+});
+
+test('plain glTF files are rejected', () => {
+  const f = crafted({ asset: { version: '2.0' } });
+  assert.throws(() => loadVRM(f), { message: 'not a VRM file' });
+});
