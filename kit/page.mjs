@@ -377,9 +377,7 @@ export function buildPage(spec, { dir = null, cacheDir = null, onPanel = null, w
       const r = renderPanel({ ...(p.shade || {}), scene, actors, cam: camSpec, background: scaled(p.background ?? flat(0), ss), light: p.light });
       const k = inkPanel(r, { style, seed: p.id, regions: p.regions, ss });
       const effects = p.effects.flatMap(e => e.layers(w, h, { seed: p.id }));
-      let black = 0, tone = 0;
-      for (let i = 0; i < r.D.length; i++) { const v = r.D[i]; if (v >= style.black) black++; else if (v >= style.tone1) tone++; }
-      const N = r.D.length;
+      const { black, tone, total: N } = k.counts;
       entry = {
         svg: panelSvg(p, k, effects),
         stats: { id: p.id, style: style.name ?? null, balance: style.balance ?? null, black: r4(black / N), tone: r4(tone / N), white: r4((N - black - tone) / N), strokes: strokeCounts(k, effects) },

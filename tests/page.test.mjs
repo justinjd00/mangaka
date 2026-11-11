@@ -180,3 +180,13 @@ test('a clip polygon shapes a panel: ink, white ground and frame follow it, and 
   assert.equal(partsInRect(map, [20, 40, 4, 4]).panel, 'l');
   assert.equal(partsInRect(map, [170, 40, 4, 4]).panel, 'r');
 });
+
+test('page stats count blacks with the region thresholds the inker used', () => {
+  const one = regions => buildPage({ size: [130, 110], panels: [{ id: 'a', rect: [0, 0, 130, 110], scene: ballScene(),
+    camera: { yaw: 0.2, pitch: 0.3, scale: 90, target: [0, 0.3, 0] }, background: gradient(0.3, 0.7), regions }] }).stats.panels[0];
+  const plain = one([]);
+  const darker = one([{ rect: [0, 0, 130, 110], set: { black: 0.4 } }]);
+  assert.ok(darker.black > plain.black + 0.05, `${plain.black} -> ${darker.black}`);
+  assert.equal(r4sum(darker), 1);
+});
+const r4sum = s => Math.round((s.black + s.tone + s.white) * 1000) / 1000;

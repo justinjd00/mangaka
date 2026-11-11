@@ -84,6 +84,7 @@ const SCAN_DIRS = { diag: -PI / 4, diag2: 0.61 };
  * r: output of renderPanel. style: preset name or style object.
  * seed: panel id string. regions: [{ rect: [x, y, w, h], feather, set }] in panel pixels.
  * ss: supersampling factor of the buffers (scales lengths, spacing and line weights).
+ * Returns the ink layers plus counts: { black, tone, total } pixels under the thresholds used.
  */
 export function inkPanel(r, { style = 'seinen-dense', seed, regions = [], ss = 1 } = {}) {
   if (typeof seed !== 'string' || !seed) throw new Error('inkPanel: seed must be a non-empty string (the panel id)');
@@ -139,6 +140,11 @@ export function inkPanel(r, { style = 'seinen-dense', seed, regions = [], ss = 1
       if (s.brush !== undefined) BM[i] += (s.brush - BM[i]) * w;
     }
   }
+
+  // Shares the page stats report, counted with the per-pixel thresholds the ink uses:
+  // black at or above TB, tone (toned or hatched mid-tones) at or above T1 below that.
+  const counts = { black: 0, tone: 0, total: N };
+  for (let i = 0; i < N; i++) { if (D[i] >= TB[i]) counts.black++; else if (D[i] >= T1[i]) counts.tone++; }
 
   // Hatch direction fields; result in dir.
   const dir = [0, 0];
@@ -462,7 +468,7 @@ export function inkPanel(r, { style = 'seinen-dense', seed, regions = [], ss = 1
     for (let n = 0; n < total; n++) for (let d = 0; d < 2; d++) if (ecls(n, d) && !evis(n, d)) follow(n, d);
   }
 
-  return { tone1, tone2, blacks, hatch, mail, dots, brush, decals: inkDecals(r, K, DK, TB, enc) };
+  return { tone1, tone2, blacks, hatch, mail, dots, brush, decals: inkDecals(r, K, DK, TB, enc), counts };
 }
 
 /** Project decals (lines, polys, rivets, holes, strands) with a depth test. */
